@@ -26,6 +26,7 @@ use ::windows::Win32::System::Services::{
     SC_MANAGER_ENUMERATE_SERVICE, SERVICE_ACTIVE, SERVICE_QUERY_STATUS, SERVICE_START,
     SERVICE_STOPPED, SERVICE_WIN32, StartServiceW,
 };
+use ::windows::Win32::System::SystemInformation::{GetSystemDirectoryW, GetWindowsDirectoryW};
 use ::windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 use ::windows::core::{HSTRING, PCWSTR};
 use regex::Regex;
@@ -164,9 +165,132 @@ struct Output {
     stderr: String,
 }
 
-fn system32() -> std::path::PathBuf {
-    let root = std::env::var_os("SystemRoot").unwrap_or_else(|| r"C:\Windows".into());
-    std::path::Path::new(&root).join("System32")
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
+
+/// `GetSystemDirectoryW` / `GetWindowsDirectoryW` style call into a buffer.
+fn api_dir(f: impl Fn(&mut [u16]) -> u32, fallback: &str) -> PathBuf {
+    let mut buf = [0u16; 512];
+    let n = f(&mut buf) as usize;
+    if n == 0 || n >= buf.len() {
+        return PathBuf::from(fallback);
+    }
+    PathBuf::from(String::from_utf16_lossy(&buf[..n]))
+}
+
+/// System32, from the API: this process is elevated and must not trust
+/// %SystemRoot%, which the (unelevated) user's environment controls.
+fn system32() -> PathBuf {
+    static DIR: OnceLock<PathBuf> = OnceLock::new();
+    DIR.get_or_init(|| {
+        // SAFETY: the buffer is valid for its length.
+        api_dir(|b| unsafe { GetSystemDirectoryW(Some(b)) }, r"C:\Windows\System32")
+    })
+    .clone()
+}
+
+fn windows_dir() -> PathBuf {
+    static DIR: OnceLock<PathBuf> = OnceLock::new();
+    DIR.get_or_init(|| {
+        // SAFETY: the buffer is valid for its length.
+        api_dir(|b| unsafe { GetWindowsDirectoryW(Some(b)) }, r"C:\Windows")
+    })
+    .clone()
+}
+
+/// Folders the child environment is built from (all from OS APIs).
+struct EnvDirs {
+    system32: PathBuf,
+    windows: PathBuf,
+    profile: Option<PathBuf>,
+    local_app_data: Option<PathBuf>,
+    roaming_app_data: Option<PathBuf>,
+    program_files: Option<PathBuf>,
+    program_files_x86: Option<PathBuf>,
+    program_data: Option<PathBuf>,
+}
+
+/// Harmless, informational variables copied from our own environment.
+const PASS_THROUGH: &[&str] = &[
+    "USERNAME",
+    "USERDOMAIN",
+    "COMPUTERNAME",
+    "PROCESSOR_ARCHITECTURE",
+    "PROCESSOR_IDENTIFIER",
+    "NUMBER_OF_PROCESSORS",
+    "OS",
+];
+
+/// The complete environment of every tool we start. Our own environment
+/// comes from the unelevated user (HKCU\Environment), so nothing that
+/// changes how a tool or PowerShell loads code is inherited: no PATH,
+/// PSModulePath, COR_* / COMPlus_* profiler hooks or execution-policy
+/// overrides. Paths are rebuilt from the API-derived folders in `d`.
+fn child_env(d: &EnvDirs, ours: impl Fn(&str) -> Option<OsString>) -> Vec<(String, OsString)> {
+    let s32 = d.system32.as_os_str();
+    let join = |p: &Path, sub: &str| p.join(sub).into_os_string();
+    let ps_home = d.system32.join(r"WindowsPowerShell\v1.0");
+    let mut path = OsString::from(s32);
+    for p in [d.windows.clone(), d.system32.join("Wbem"), ps_home.clone()] {
+        path.push(";");
+        path.push(p);
+    }
+    let drive = d
+        .windows
+        .components()
+        .next()
+        .map(|c| c.as_os_str().to_os_string())
+        .unwrap_or_else(|| "C:".into());
+    let mut v: Vec<(String, OsString)> = vec![
+        ("SystemRoot".into(), d.windows.clone().into_os_string()),
+        ("windir".into(), d.windows.clone().into_os_string()),
+        ("SystemDrive".into(), drive),
+        ("ComSpec".into(), join(&d.system32, "cmd.exe")),
+        ("PATH".into(), path),
+        ("PATHEXT".into(), ".COM;.EXE;.BAT;.CMD;.VBS;.VBE;.JS;.JSE;.WSF;.WSH;.MSC".into()),
+        // $PSHOME\Modules only: never a module folder the user can write to.
+        ("PSModulePath".into(), join(&ps_home, "Modules")),
+        // Admin-owned; the user's own TEMP is theirs to redirect.
+        ("TEMP".into(), join(&d.windows, "Temp")),
+        ("TMP".into(), join(&d.windows, "Temp")),
+    ];
+    let mut opt = |name: &str, p: &Option<PathBuf>| {
+        if let Some(p) = p {
+            v.push((name.into(), p.clone().into_os_string()));
+        }
+    };
+    opt("USERPROFILE", &d.profile);
+    opt("LOCALAPPDATA", &d.local_app_data);
+    opt("APPDATA", &d.roaming_app_data);
+    opt("ProgramFiles", &d.program_files);
+    opt("ProgramW6432", &d.program_files);
+    opt("ProgramFiles(x86)", &d.program_files_x86);
+    opt("ProgramData", &d.program_data);
+    opt("ALLUSERSPROFILE", &d.program_data);
+    for name in PASS_THROUGH {
+        if let Some(val) = ours(name) {
+            v.push((name.to_string(), val));
+        }
+    }
+    v
+}
+
+fn tool_env() -> &'static [(String, OsString)] {
+    static ENV: OnceLock<Vec<(String, OsString)>> = OnceLock::new();
+    ENV.get_or_init(|| {
+        use crate::cleanup::known;
+        let d = EnvDirs {
+            system32: system32(),
+            windows: windows_dir(),
+            profile: known::profile(),
+            local_app_data: known::local_app_data(),
+            roaming_app_data: known::roaming_app_data(),
+            program_files: known::program_files(),
+            program_files_x86: known::program_files_x86(),
+            program_data: known::program_data(),
+        };
+        child_env(&d, |n| std::env::var_os(n))
+    })
 }
 
 const TOOL_TIMEOUT: Duration = Duration::from_secs(120);
@@ -185,6 +309,9 @@ fn run_tool(exe: &std::path::Path, args: &[&str]) -> Result<Output, SysError> {
     let name = exe.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let mut child = Command::new(exe)
         .args(args)
+        .env_clear()
+        .envs(tool_env().iter().map(|(k, v)| (k, v)))
+        .current_dir(system32())
         .creation_flags(CREATE_NO_WINDOW)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -273,8 +400,11 @@ fn tool_err(what: &str, o: &Output, denied_if_unelevated: bool) -> SysError {
 
 fn run_ps(script: &str) -> Result<Output, SysError> {
     let exe = system32().join(r"WindowsPowerShell\v1.0\powershell.exe");
+    // Module autoloading reads $env:PSModulePath when a command is first
+    // used, so pin it to $PSHOME\Modules inside the session as well.
     let full = format!(
-        "$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.Encoding]::UTF8;{script}"
+        "$env:PSModulePath=Join-Path $PSHOME 'Modules';\
+         $ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.Encoding]::UTF8;{script}"
     );
     let utf16le: Vec<u8> = full.encode_utf16().flat_map(u16::to_le_bytes).collect();
     let encoded = base64(&utf16le);
@@ -836,6 +966,54 @@ mod tests {
         assert_eq!(base64(b"f"), "Zg==");
         assert_eq!(base64(b"fo"), "Zm8=");
         assert_eq!(base64(b"foo"), "Zm9v");
+    }
+
+    #[test]
+    fn child_env_ignores_the_users_environment() {
+        let d = EnvDirs {
+            system32: PathBuf::from(r"C:\Windows\System32"),
+            windows: PathBuf::from(r"C:\Windows"),
+            profile: Some(PathBuf::from(r"C:\Users\bob")),
+            local_app_data: Some(PathBuf::from(r"C:\Users\bob\AppData\Local")),
+            roaming_app_data: None,
+            program_files: Some(PathBuf::from(r"C:\Program Files")),
+            program_files_x86: Some(PathBuf::from(r"C:\Program Files (x86)")),
+            program_data: Some(PathBuf::from(r"C:\ProgramData")),
+        };
+        // A hostile environment: every variable points at the user's files.
+        let env = child_env(&d, |_| Some(OsString::from(r"C:\Users\bob\evil")));
+        let get = |k: &str| env.iter().find(|(n, _)| n.eq_ignore_ascii_case(k)).map(|(_, v)| v.clone());
+        assert_eq!(get("SystemRoot").unwrap(), r"C:\Windows");
+        assert_eq!(get("windir").unwrap(), r"C:\Windows");
+        assert_eq!(get("SystemDrive").unwrap(), "C:");
+        assert_eq!(get("PSModulePath").unwrap(), r"C:\Windows\System32\WindowsPowerShell\v1.0\Modules");
+        assert_eq!(get("TEMP").unwrap(), r"C:\Windows\Temp");
+        assert_eq!(get("TMP").unwrap(), r"C:\Windows\Temp");
+        assert_eq!(
+            get("PATH").unwrap(),
+            r"C:\Windows\System32;C:\Windows;C:\Windows\System32\Wbem;C:\Windows\System32\WindowsPowerShell\v1.0"
+        );
+        assert_eq!(get("ComSpec").unwrap(), r"C:\Windows\System32\cmd.exe");
+        assert_eq!(get("LOCALAPPDATA").unwrap(), r"C:\Users\bob\AppData\Local");
+        assert_eq!(get("ProgramFiles(x86)").unwrap(), r"C:\Program Files (x86)");
+        assert_eq!(get("APPDATA"), None, "unknown folder is left out, not inherited");
+        for k in ["COR_ENABLE_PROFILING", "COR_PROFILER_PATH", "COMPlus_ETWEnabled", "PSExecutionPolicyPreference"] {
+            assert_eq!(get(k), None, "{k} must not be inherited");
+        }
+        // Only the informational pass-through names carry our own values.
+        let inherited: Vec<&str> =
+            env.iter().filter(|(_, v)| v == r"C:\Users\bob\evil").map(|(k, _)| k.as_str()).collect();
+        assert_eq!(inherited, PASS_THROUGH);
+    }
+
+    #[test]
+    fn system_dirs_come_from_the_api() {
+        // SAFETY: plain buffer call.
+        let n = unsafe { GetSystemDirectoryW(None) };
+        assert!(n > 0);
+        assert!(system32().join("kernel32.dll").exists());
+        assert!(windows_dir().join("explorer.exe").exists());
+        assert_eq!(system32().parent().unwrap(), windows_dir());
     }
 
     #[test]

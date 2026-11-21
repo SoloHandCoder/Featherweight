@@ -13,7 +13,10 @@ per_user = true
 # SysWOW64\OneDriveSetup.exe (Windows 10 64-bit). `/uninstall` removes the
 # current user's OneDrive, `/uninstall /allusers` a per-machine install in
 # Program Files; no arguments installs it again. Only those protected system
-# paths are executed - never a path read from the (user-writable) registry.
+# paths are executed - never a path read from the (user-writable) registry,
+# and the Windows folder comes from [Environment]::SystemDirectory (the OS
+# API), not from $env:SystemRoot, which the user's environment could set.
+# A non-zero exit code from setup fails the action with that code.
 #
 # Setup is started with ShellExecute (no inherited stdout/stderr pipes) and
 # only setup itself is waited for: OneDrive.exe, which setup may start,
@@ -32,9 +35,10 @@ if (@($exe | Where-Object { Test-Path -LiteralPath $_ }).Count -eq 0) { '1' } el
 '''
 apply = '''
 $ErrorActionPreference = 'Stop'
+$sys32 = [Environment]::SystemDirectory
 $setup = @(
-  (Join-Path $env:SystemRoot 'System32\OneDriveSetup.exe'),
-  (Join-Path $env:SystemRoot 'SysWOW64\OneDriveSetup.exe')
+  (Join-Path $sys32 'OneDriveSetup.exe'),
+  (Join-Path (Split-Path -Parent $sys32) 'SysWOW64\OneDriveSetup.exe')
 ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $setup) { throw 'OneDriveSetup.exe was not found in the Windows folder.' }
 function Invoke-Setup([string]$arguments) {
@@ -45,6 +49,7 @@ function Invoke-Setup([string]$arguments) {
   $si.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
   $p = [System.Diagnostics.Process]::Start($si)
   if (-not $p.WaitForExit(100000)) { throw 'OneDrive setup is still running. Check again in a minute.' }
+  if ($p.ExitCode -ne 0) { throw "OneDrive setup failed (exit code $($p.ExitCode))." }
 }
 $perMachine = $false
 foreach ($pf in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
@@ -58,9 +63,10 @@ if (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'Microsoft\OneDrive\OneD
 '''
 undo = '''
 $ErrorActionPreference = 'Stop'
+$sys32 = [Environment]::SystemDirectory
 $setup = @(
-  (Join-Path $env:SystemRoot 'System32\OneDriveSetup.exe'),
-  (Join-Path $env:SystemRoot 'SysWOW64\OneDriveSetup.exe')
+  (Join-Path $sys32 'OneDriveSetup.exe'),
+  (Join-Path (Split-Path -Parent $sys32) 'SysWOW64\OneDriveSetup.exe')
 ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 if (-not $setup) { throw 'OneDriveSetup.exe was not found in the Windows folder.' }
 $si = New-Object System.Diagnostics.ProcessStartInfo
@@ -69,4 +75,5 @@ $si.UseShellExecute = $true
 $si.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
 $p = [System.Diagnostics.Process]::Start($si)
 if (-not $p.WaitForExit(100000)) { throw 'OneDrive setup is still running. Check again in a minute.' }
+if ($p.ExitCode -ne 0) { throw "OneDrive setup failed (exit code $($p.ExitCode))." }
 '''

@@ -4,6 +4,7 @@ use crate::system::System;
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,6 +15,32 @@ pub struct CleanupTarget {
     pub paths: Vec<PathBuf>,
     pub bytes: u64,
     pub needs_service_stop: Option<String>,
+    /// Files created or written more recently than this are left alone (and
+    /// not counted): something may still be using them.
+    #[serde(skip)]
+    pub min_age: Option<Duration>,
+}
+
+/// How long temp files are kept before they count as junk.
+pub const TEMP_MIN_AGE: Duration = Duration::from_secs(24 * 3600);
+
+/// Files changed after `cutoff` are kept.
+fn is_recent(created: Option<SystemTime>, modified: Option<SystemTime>, cutoff: Option<SystemTime>) -> bool {
+    let Some(cutoff) = cutoff else { return false };
+    created.into_iter().chain(modified).any(|t| t > cutoff)
+}
+
+fn cutoff_of(t: &CleanupTarget) -> Option<SystemTime> {
+    t.min_age.and_then(|a| SystemTime::now().checked_sub(a))
+}
+
+/// The user temp folder target: `temp` (from the environment, which the user
+/// controls) is accepted only when it is exactly `<LocalAppData>\Temp`.
+pub fn user_temp_paths(temp: Option<PathBuf>, local_app_data: Option<PathBuf>) -> Vec<PathBuf> {
+    let (Some(temp), Some(local)) = (temp, local_app_data) else { return Vec::new() };
+    let norm = |p: &Path| p.to_string_lossy().trim_end_matches(['\\', '/']).to_lowercase();
+    let expected = local.join("Temp");
+    if norm(&temp) == norm(&expected) { vec![expected] } else { Vec::new() }
 }
 
 /// Serializes paths with `to_string_lossy` so a non-UTF-8 path can't make the
@@ -35,11 +62,11 @@ pub struct CleanupReport {
 pub(crate) mod known {
     use std::path::PathBuf;
     use windows::Win32::System::Com::CoTaskMemFree;
-    use windows::Win32::Storage::FileSystem::{GetTempPath2W, GetTempPathW};
     use windows::Win32::System::SystemInformation::GetWindowsDirectoryW;
     use windows::Win32::UI::Shell::{
         FOLDERID_CommonStartup, FOLDERID_LocalAppData, FOLDERID_Profile, FOLDERID_ProgramData,
-        FOLDERID_ProgramFiles, FOLDERID_ProgramFilesX86, FOLDERID_Startup, KF_FLAG_DEFAULT, SHGetKnownFolderPath,
+        FOLDERID_ProgramFiles, FOLDERID_ProgramFilesX86, FOLDERID_RoamingAppData, FOLDERID_Startup,
+        KF_FLAG_DEFAULT, SHGetKnownFolderPath,
     };
     use windows::core::GUID;
 
@@ -51,14 +78,12 @@ pub(crate) mod known {
         Some(PathBuf::from(String::from_utf16_lossy(&buf[..n])))
     }
 
+    /// The user's temp folder as the environment names it. std resolves
+    /// GetTempPath2W at run time (falling back to GetTempPathW), so this never
+    /// adds a static import that unpatched Windows 10 can't load. It comes
+    /// from TMP/TEMP, so `default_targets` only accepts `<LocalAppData>\Temp`.
     pub fn temp_dir() -> Option<PathBuf> {
-        let mut buf = [0u16; 1024];
-        // SAFETY: buffer is valid for its length.
-        let n = unsafe { GetTempPath2W(Some(&mut buf)) };
-        let n = if n == 0 { unsafe { GetTempPathW(Some(&mut buf)) } } else { n };
-        let p = from_buf(&buf, n)?;
-        // The API returns a trailing separator; drop it.
-        Some(PathBuf::from(p.to_string_lossy().trim_end_matches('\\').to_string()))
+        Some(std::env::temp_dir())
     }
 
     pub fn windows_dir() -> Option<PathBuf> {
@@ -81,6 +106,9 @@ pub(crate) mod known {
 
     pub fn local_app_data() -> Option<PathBuf> {
         folder(&FOLDERID_LocalAppData)
+    }
+    pub fn roaming_app_data() -> Option<PathBuf> {
+        folder(&FOLDERID_RoamingAppData)
     }
     pub fn profile() -> Option<PathBuf> {
         folder(&FOLDERID_Profile)
@@ -184,11 +212,18 @@ pub fn default_targets() -> Vec<CleanupTarget> {
         paths,
         bytes: 0,
         needs_service_stop: svc.map(String::from),
+        min_age: None,
     };
+    let temp = |target: CleanupTarget| CleanupTarget { min_age: Some(TEMP_MIN_AGE), ..target };
     let root = system_root();
     vec![
-        t("user-temp", "Your temporary files", known::temp_dir().into_iter().collect(), None),
-        t("system-temp", "Windows temporary files", vec![root.join("Temp")], None),
+        temp(t(
+            "user-temp",
+            "Your temporary files",
+            user_temp_paths(known::temp_dir(), known::local_app_data()),
+            None,
+        )),
+        temp(t("system-temp", "Windows temporary files", vec![root.join("Temp")], None)),
         t(
             "wu-cache",
             "Old Windows Update downloads",
@@ -269,8 +304,9 @@ fn entries_of(path: &Path) -> Vec<PathBuf> {
     }
 }
 
-/// (bytes, file count) under `p`, never descending into links.
-fn measure(p: &Path) -> (u64, u32) {
+/// (bytes, file count) under `p`, never descending into links and leaving
+/// out files changed after `cutoff`.
+fn measure(p: &Path, cutoff: Option<SystemTime>) -> (u64, u32) {
     let Ok(m) = fs::symlink_metadata(p) else { return (0, 0) };
     if is_link(&m) {
         return (0, 0);
@@ -278,16 +314,24 @@ fn measure(p: &Path) -> (u64, u32) {
     if m.is_dir() {
         let Ok(rd) = fs::read_dir(p) else { return (0, 0) };
         return rd.flatten().fold((0, 0), |(b, n), e| {
-            let (b2, n2) = measure(&e.path());
+            let (b2, n2) = measure(&e.path(), cutoff);
             (b + b2, n + n2)
         });
+    }
+    if is_recent(m.created().ok(), m.modified().ok(), cutoff) {
+        return (0, 0);
     }
     (m.len(), 1)
 }
 
 pub fn scan(targets: &mut [CleanupTarget]) {
     for t in targets {
-        t.bytes = valid_paths(t).into_iter().flat_map(|p| entries_of(p)).map(|e| measure(&e).0).sum();
+        let cutoff = cutoff_of(t);
+        t.bytes = valid_paths(t)
+            .into_iter()
+            .flat_map(|p| entries_of(p))
+            .map(|e| measure(&e, cutoff).0)
+            .sum();
     }
 }
 
@@ -313,7 +357,7 @@ fn remove_file(p: &Path) -> bool {
 /// Portable fallback (not used on Windows, where `winfs` does handle-based
 /// deletion).
 #[cfg(not(windows))]
-fn delete(p: &Path, _root: &str, rep: &mut CleanupReport) {
+fn delete(p: &Path, _root: &str, cutoff: Option<SystemTime>, rep: &mut CleanupReport) {
     let Ok(m) = fs::symlink_metadata(p) else { return };
     if is_link(&m) {
         // Remove only the link itself, never what it points at.
@@ -323,11 +367,14 @@ fn delete(p: &Path, _root: &str, rep: &mut CleanupReport) {
     if m.is_dir() {
         if let Ok(rd) = fs::read_dir(p) {
             for e in rd.flatten() {
-                delete(&e.path(), _root, rep);
+                delete(&e.path(), _root, cutoff, rep);
             }
         }
         // Fails (harmlessly) if something inside was skipped.
         let _ = fs::remove_dir(p);
+        return;
+    }
+    if is_recent(m.created().ok(), m.modified().ok(), cutoff) {
         return;
     }
     let size = m.len();
@@ -396,7 +443,9 @@ fn valid_paths(t: &CleanupTarget) -> Vec<&PathBuf> {
 /// junction mid-clean can never redirect the delete outside the root.
 #[cfg(windows)]
 mod winfs {
-    use super::{ATTR_DIR, ATTR_REPARSE, Action, CleanupReport, decide, measure};
+    use super::{ATTR_DIR, ATTR_REPARSE, Action, CleanupReport, decide, is_recent, measure};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use windows::Win32::Foundation::FILETIME;
     use std::os::windows::ffi::OsStrExt;
     use std::path::Path;
     use windows::Win32::Foundation::{CloseHandle, HANDLE};
@@ -516,7 +565,14 @@ mod winfs {
         .is_ok()
     }
 
-    pub fn delete(path: &Path, root: &str, rep: &mut CleanupReport) {
+    fn system_time(ft: FILETIME) -> Option<SystemTime> {
+        // 100 ns ticks since 1601-01-01; 11 644 473 600 s before the Unix epoch.
+        let ticks = (u64::from(ft.dwHighDateTime) << 32) | u64::from(ft.dwLowDateTime);
+        let unix = ticks.checked_sub(116_444_736_000_000_000)?;
+        Some(UNIX_EPOCH + Duration::from_nanos(unix.saturating_mul(100)))
+    }
+
+    pub fn delete(path: &Path, root: &str, cutoff: Option<SystemTime>, rep: &mut CleanupReport) {
         let full = FILE_ACCESS_RIGHTS(DELETE.0 | FILE_READ_ATTRIBUTES.0 | FILE_WRITE_ATTRIBUTES.0);
         let plain = FILE_ACCESS_RIGHTS(DELETE.0 | FILE_READ_ATTRIBUTES.0);
         let h = match open(path, full).or_else(|_| open(path, plain)) {
@@ -524,7 +580,10 @@ mod winfs {
             Err(e) => {
                 // 2 / 3: already gone.
                 if !matches!(e.raw_os_error(), Some(2 | 3)) {
-                    rep.skipped_files += measure(path).1.max(1);
+                    // Something we can't open (a fresh file in a temp target
+                    // aside) counts as at least one skipped file.
+                    let n = measure(path, cutoff).1;
+                    rep.skipped_files += if cutoff.is_none() { n.max(1) } else { n };
                 }
                 return;
             }
@@ -553,11 +612,14 @@ mod winfs {
             // while we enumerate it.
             if let Ok(rd) = std::fs::read_dir(path) {
                 for e in rd.flatten() {
-                    delete(&e.path(), root, rep);
+                    delete(&e.path(), root, cutoff, rep);
                 }
             }
             let _ = set_delete(&h); // fails harmlessly if something was skipped
             return;
+        }
+        if is_recent(system_time(i.ftCreationTime), system_time(i.ftLastWriteTime), cutoff) {
+            return; // still fresh: kept, not counted
         }
         let size = (u64::from(i.nFileSizeHigh) << 32) | u64::from(i.nFileSizeLow);
         if set_delete(&h) {
@@ -592,15 +654,16 @@ fn open_root(root: &Path, protected: &[PathBuf]) -> Option<(RootHold, String)> {
     validate_target(Path::new(strip_verbatim(&canon)), protected).then_some((hold, canon))
 }
 
-fn delete_entry(p: &Path, root: &str, rep: &mut CleanupReport) {
+fn delete_entry(p: &Path, root: &str, cutoff: Option<SystemTime>, rep: &mut CleanupReport) {
     #[cfg(windows)]
-    winfs::delete(p, root, rep);
+    winfs::delete(p, root, cutoff, rep);
     #[cfg(not(windows))]
-    delete(p, root, rep);
+    delete(p, root, cutoff, rep);
 }
 
 pub fn clean<S: System>(sys: &mut S, t: &CleanupTarget) -> CleanupReport {
     let mut rep = CleanupReport::default();
+    let cutoff = cutoff_of(t);
     // (canonical root, entries) per valid path; invalid paths are refused.
     let protected = protected_paths();
     let jobs: Vec<(RootHold, String, Vec<PathBuf>)> = t
@@ -630,14 +693,14 @@ pub fn clean<S: System>(sys: &mut S, t: &CleanupTarget) -> CleanupReport {
                 }
                 // Can't safely delete: report everything as skipped.
                 rep.skipped_files =
-                    jobs.iter().flat_map(|(_, _, es)| es).map(|e| measure(e).1).sum();
+                    jobs.iter().flat_map(|(_, _, es)| es).map(|e| measure(e, cutoff).1).sum();
                 return rep;
             }
         }
     }
     for (_hold, root, entries) in &jobs {
         for e in entries {
-            delete_entry(e, root, &mut rep);
+            delete_entry(e, root, cutoff, &mut rep);
         }
     }
     rep
@@ -657,7 +720,54 @@ mod tests {
             paths,
             bytes: 0,
             needs_service_stop: svc.map(String::from),
+            min_age: None,
         }
+    }
+
+    /// Backdates a file's creation and last-write times by `days`.
+    #[cfg(windows)]
+    fn age(p: &Path, days: u64) {
+        use std::os::windows::fs::FileTimesExt;
+        let t = std::time::SystemTime::now() - std::time::Duration::from_secs(days * 86_400);
+        let f = fs::OpenOptions::new().write(true).open(p).unwrap();
+        f.set_times(fs::FileTimes::new().set_modified(t).set_created(t)).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn temp_targets_keep_files_from_the_last_day() {
+        let d = tempfile::tempdir().unwrap();
+        write(&d.path().join("old.bin"), 100);
+        write(&d.path().join("new.bin"), 7);
+        write(&d.path().join("sub/old2.bin"), 20);
+        write(&d.path().join("sub/new2.bin"), 3);
+        age(&d.path().join("old.bin"), 2);
+        age(&d.path().join("sub/old2.bin"), 2);
+        let mut t = target(vec![d.path().to_path_buf()], None);
+        t.min_age = Some(std::time::Duration::from_secs(24 * 3600));
+        let mut ts = vec![t];
+        scan(&mut ts);
+        assert_eq!(ts[0].bytes, 120, "recent files are not counted");
+        let r = clean(&mut FakeSystem::new(), &ts[0]);
+        assert_eq!(r, CleanupReport { freed_bytes: 120, skipped_files: 0 });
+        assert!(d.path().join("new.bin").exists());
+        assert!(d.path().join("sub/new2.bin").exists(), "folder with a recent file kept");
+        assert!(!d.path().join("old.bin").exists());
+        assert!(!d.path().join("sub/old2.bin").exists());
+    }
+
+    #[test]
+    fn user_temp_is_only_the_local_app_data_temp_folder() {
+        let local = Some(PathBuf::from(r"C:\Users\bob\AppData\Local"));
+        let ok = |t: &str| user_temp_paths(Some(PathBuf::from(t)), local.clone());
+        assert_eq!(ok(r"C:\Users\bob\AppData\Local\Temp"), vec![PathBuf::from(r"C:\Users\bob\AppData\Local\Temp")]);
+        assert_eq!(ok(r"c:\users\BOB\appdata\local\temp\").len(), 1, "case and trailing slash");
+        assert!(ok(r"C:\Users\bob\Documents").is_empty(), "TEMP pointed elsewhere");
+        assert!(ok(r"C:\Users\bob\AppData\Local").is_empty());
+        assert!(ok(r"C:\Users\bob\AppData\Local\Temp\..\..").is_empty());
+        assert!(ok(r"D:\Temp").is_empty());
+        assert!(user_temp_paths(None, local.clone()).is_empty());
+        assert!(user_temp_paths(Some(PathBuf::from(r"C:\Users\bob\AppData\Local\Temp")), None).is_empty());
     }
 
     fn write(p: &Path, n: usize) {
@@ -941,5 +1051,9 @@ mod tests {
         assert_eq!(wu.needs_service_stop.as_deref(), Some("wuauserv"));
         assert!(wu.paths[0].ends_with(r"SoftwareDistribution\Download"));
         assert!(ts[3].paths[0].to_string_lossy().ends_with("thumbcache_*.db"));
+        let day = Some(std::time::Duration::from_secs(24 * 3600));
+        assert_eq!(ts[0].min_age, day, "user temp keeps recent files");
+        assert_eq!(ts[1].min_age, day, "system temp keeps recent files");
+        assert!(ts[2..].iter().all(|t| t.min_age.is_none()));
     }
 }

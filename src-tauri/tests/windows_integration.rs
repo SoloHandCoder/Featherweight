@@ -160,3 +160,19 @@ fn unsupported_registry_type_is_other_error() {
     // reg_values skips it rather than failing.
     assert!(sys.reg_values(Hive::Hkcu, KEY).unwrap().is_empty());
 }
+
+#[test]
+#[ignore]
+fn powershell_runs_with_the_sanitized_environment_read_only() {
+    let out = WindowsSystem::new()
+        .run_powershell(
+            "\"$env:PSModulePath|$env:SystemRoot|$env:TEMP|$([bool]$env:COR_ENABLE_PROFILING)|$((Get-Command Get-AppxPackage).Source)\"",
+        )
+        .unwrap();
+    let parts: Vec<&str> = out.split('|').collect();
+    assert!(parts[0].to_lowercase().ends_with(r"\system32\windowspowershell\v1.0\modules"), "{out}");
+    assert!(!parts[0].contains(';'), "only one module folder: {out}");
+    assert!(!parts[1].is_empty() && parts[2].to_lowercase().ends_with(r"\temp"), "{out}");
+    assert_eq!(parts[3], "False", "{out}");
+    assert_eq!(parts[4], "Appx", "{out}");
+}

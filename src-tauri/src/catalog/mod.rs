@@ -654,6 +654,29 @@ mod tests {
     }
 
     #[test]
+    fn scripts_never_trust_environment_paths_for_what_they_run() {
+        for t in &Catalog::bundled().tweaks {
+            for a in &t.actions {
+                if let ActionDef::PowerShell { check, apply, undo } = a {
+                    for s in [check, apply, undo] {
+                        let l = s.to_lowercase();
+                        assert!(!l.contains("$env:systemroot") && !l.contains("$env:windir"), "{}", t.id);
+                    }
+                }
+            }
+        }
+        let c = Catalog::bundled();
+        let Some(ActionDef::PowerShell { apply, undo, .. }) = c.get("remove-onedrive").unwrap().actions.first()
+        else {
+            panic!("remove-onedrive is a script tweak")
+        };
+        for s in [apply, undo] {
+            assert!(s.contains("[Environment]::SystemDirectory"));
+            assert!(s.contains("$p.ExitCode -ne 0"), "setup's exit code is checked");
+        }
+    }
+
+    #[test]
     fn junk_list_excludes_packages_that_break_things() {
         let c = Catalog::bundled();
         let pkgs: Vec<&str> = c
