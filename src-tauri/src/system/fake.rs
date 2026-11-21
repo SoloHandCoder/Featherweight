@@ -10,6 +10,8 @@ type RegKey = (Hive, String, String);
 
 pub struct FakeSystem {
     regs: HashMap<RegKey, RegData>,
+    /// Original-case value names (keys of `regs` are lowercased).
+    reg_names: HashMap<RegKey, String>,
     services: HashMap<String, StartType>,
     tasks: HashMap<String, bool>,
     /// Package names this "build" knows about (others report `None`).
@@ -45,6 +47,7 @@ impl FakeSystem {
     pub fn new() -> Self {
         FakeSystem {
             regs: HashMap::new(),
+            reg_names: HashMap::new(),
             services: HashMap::new(),
             tasks: HashMap::new(),
             known_appx: HashSet::new(),
@@ -61,6 +64,7 @@ impl FakeSystem {
     }
 
     pub fn with_reg(mut self, hive: Hive, path: &str, name: &str, value: RegData) -> Self {
+        self.reg_names.insert(rk(hive, path, name), name.to_string());
         self.regs.insert(rk(hive, path, name), value);
         self
     }
@@ -124,6 +128,18 @@ impl System for FakeSystem {
         Ok(self.regs.get(&rk(hive, path, name)).cloned())
     }
 
+    fn reg_values(&self, hive: Hive, path: &str) -> Result<Vec<(String, RegData)>, SysError> {
+        let want = path.to_lowercase();
+        let mut out: Vec<(String, RegData)> = self
+            .regs
+            .iter()
+            .filter(|((h, p, _), _)| *h == hive && *p == want)
+            .map(|(k, v)| (self.reg_names.get(k).cloned().unwrap_or_else(|| k.2.clone()), v.clone()))
+            .collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(out)
+    }
+
     fn reg_set(
         &mut self,
         hive: Hive,
@@ -135,9 +151,11 @@ impl System for FakeSystem {
         let key = rk(hive, path, name);
         match value {
             Some(v) => {
+                self.reg_names.insert(key.clone(), name.to_string());
                 self.regs.insert(key, v.clone());
             }
             None => {
+                self.reg_names.remove(&key);
                 self.regs.remove(&key);
             }
         }

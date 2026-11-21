@@ -519,6 +519,22 @@ impl System for WindowsSystem {
         let o = run_ps(script)?;
         if o.ok { Ok(o.stdout.trim().to_string()) } else { Err(tool_err("powershell", &o, false)) }
     }
+
+    fn reg_values(&self, hive: Hive, path: &str) -> Result<Vec<(String, RegData)>, SysError> {
+        let key = match root(hive).open_subkey_with_flags(path, KEY_READ | KEY_WOW64_64KEY) {
+            Ok(k) => k,
+            Err(e) if is_missing(&e) => return Ok(Vec::new()),
+            Err(e) => return Err(map_io(e, &format!("open {path}"))),
+        };
+        let mut out = Vec::new();
+        for item in key.enum_values() {
+            let (name, v) = item.map_err(|e| map_io(e, &format!("enumerate {path}")))?;
+            if let Ok(d) = reg_to_data(v) {
+                out.push((name, d));
+            }
+        }
+        Ok(out)
+    }
 }
 
 #[cfg(test)]

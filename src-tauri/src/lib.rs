@@ -3,6 +3,7 @@ mod catalog;
 mod engine;
 mod env;
 mod journal;
+mod startup;
 pub mod model;
 pub mod system;
 

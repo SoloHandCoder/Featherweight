@@ -105,3 +105,15 @@ fn active_power_scheme_is_guid() {
 fn powershell_echo() {
     assert_eq!(WindowsSystem.run_powershell("Write-Output 1").unwrap(), "1");
 }
+
+#[test]
+#[ignore]
+fn reg_values_lists_run_key_read_only() {
+    let sys = WindowsSystem;
+    let vals = sys
+        .reg_values(Hive::Hkcu, r"Software\Microsoft\Windows\CurrentVersion\Run")
+        .unwrap();
+    println!("{} values", vals.len());
+    // A missing key is an empty list, not an error.
+    assert!(sys.reg_values(Hive::Hkcu, r"Software\FeatherweightNoSuchKey").unwrap().is_empty());
+}
