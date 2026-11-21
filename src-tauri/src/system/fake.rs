@@ -23,6 +23,8 @@ pub struct FakeSystem {
     pub fail_skip: usize,
     /// Scripted PowerShell output keyed by exact script text.
     pub ps_responses: HashMap<String, String>,
+    /// Scripted PowerShell failures (`SysError::Other(msg)`) keyed by exact script text.
+    pub ps_errors: HashMap<String, String>,
     /// Every `(package, all_users)` passed to a successful `remove_appx`.
     pub removed_appx: Vec<(String, bool)>,
     /// Every script passed to `run_powershell`.
@@ -54,6 +56,7 @@ impl FakeSystem {
             fail_next: None,
             fail_skip: 0,
             ps_responses: HashMap::new(),
+            ps_errors: HashMap::new(),
             removed_appx: Vec::new(),
             ps_calls: Vec::new(),
             stopped_services: HashSet::new(),
@@ -234,6 +237,9 @@ impl System for FakeSystem {
     fn run_powershell(&mut self, script: &str) -> Result<String, SysError> {
         self.check_fail()?;
         self.ps_calls.push(script.to_string());
+        if let Some(msg) = self.ps_errors.get(script) {
+            return Err(SysError::Other(msg.clone()));
+        }
         self.ps_responses
             .get(script)
             .cloned()

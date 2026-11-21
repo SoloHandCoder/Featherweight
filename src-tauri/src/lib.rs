@@ -4,6 +4,7 @@ mod engine;
 mod env;
 mod journal;
 pub mod model;
+mod restore;
 pub mod system;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
