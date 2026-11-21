@@ -33,6 +33,12 @@ pub trait System {
     fn service_start(&self, name: &str) -> Result<Option<StartType>, SysError>;
     /// `Disabled` also stops the service.
     fn set_service_start(&mut self, name: &str, start: StartType) -> Result<(), SysError>;
+    /// Stops the service and waits up to 30 s for STOPPED. Returns whether it
+    /// WAS running (already stopped -> `Ok(false)`); absent -> `NotFound`.
+    fn stop_service(&mut self, name: &str) -> Result<bool, SysError>;
+    fn start_service(&mut self, name: &str) -> Result<(), SysError>;
+    /// Number of Win32 services currently active.
+    fn running_service_count(&self) -> Result<u32, SysError>;
     /// `None` = task absent.
     fn task_enabled(&self, path: &str) -> Result<Option<bool>, SysError>;
     fn set_task_enabled(&mut self, path: &str, enabled: bool) -> Result<(), SysError>;

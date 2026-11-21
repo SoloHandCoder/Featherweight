@@ -1,9 +1,11 @@
 mod actions;
 mod catalog;
+mod cleanup;
 mod engine;
 mod env;
 mod journal;
 pub mod model;
+mod stats;
 pub mod system;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

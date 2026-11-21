@@ -29,6 +29,12 @@ pub struct FakeSystem {
     pub ps_calls: Vec<String>,
     /// Services (lowercase names) stopped via `set_service_start(.., Disabled)`.
     pub stopped_services: HashSet<String>,
+    /// Services (lowercase names) currently running.
+    pub running_services: HashSet<String>,
+    /// Log of `stop_service` / `start_service` calls: `"stop:name"`, `"start:name"`.
+    pub service_calls: Vec<String>,
+    /// Makes `stop_service` fail (every time) with this message.
+    pub fail_stop: Option<String>,
 }
 
 fn rk(hive: Hive, path: &str, name: &str) -> RegKey {
@@ -57,6 +63,9 @@ impl FakeSystem {
             removed_appx: Vec::new(),
             ps_calls: Vec::new(),
             stopped_services: HashSet::new(),
+            running_services: HashSet::new(),
+            service_calls: Vec::new(),
+            fail_stop: None,
         }
     }
 
@@ -67,6 +76,13 @@ impl FakeSystem {
 
     pub fn with_service(mut self, name: &str, start: StartType) -> Self {
         self.services.insert(name.to_lowercase(), start);
+        self
+    }
+
+    /// Registers a service (Manual start) that is currently running.
+    pub fn with_running_service(mut self, name: &str) -> Self {
+        self.services.insert(name.to_lowercase(), StartType::Manual);
+        self.running_services.insert(name.to_lowercase());
         self
     }
 
@@ -161,6 +177,34 @@ impl System for FakeSystem {
                 Ok(())
             }
         }
+    }
+
+    fn stop_service(&mut self, name: &str) -> Result<bool, SysError> {
+        self.check_fail()?;
+        self.service_calls.push(format!("stop:{name}"));
+        let key = name.to_lowercase();
+        if !self.services.contains_key(&key) {
+            return Err(SysError::NotFound(format!("service {name}")));
+        }
+        if let Some(m) = &self.fail_stop {
+            return Err(SysError::Other(m.clone()));
+        }
+        Ok(self.running_services.remove(&key))
+    }
+
+    fn start_service(&mut self, name: &str) -> Result<(), SysError> {
+        self.check_fail()?;
+        self.service_calls.push(format!("start:{name}"));
+        let key = name.to_lowercase();
+        if !self.services.contains_key(&key) {
+            return Err(SysError::NotFound(format!("service {name}")));
+        }
+        self.running_services.insert(key);
+        Ok(())
+    }
+
+    fn running_service_count(&self) -> Result<u32, SysError> {
+        Ok(self.running_services.len() as u32)
     }
 
     fn task_enabled(&self, path: &str) -> Result<Option<bool>, SysError> {
