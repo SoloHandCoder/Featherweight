@@ -21,7 +21,9 @@
   let entries = $state<StartupEntry[]>([]);
   let loading = $state(false);
   let loaded = $state(false);
+  /** Last list failure. A toggle failure is kept apart so the re-list cannot wipe it. */
   let error = $state<string | null>(null);
+  let toggleError = $state<string | null>(null);
   /** Id of the entry being switched, for its row's status text. */
   let changing = $state<string | null>(null);
   /** The restore point question is asked once; later toggles reuse the answer. */
@@ -81,7 +83,7 @@
   async function toggle(entry: StartupEntry) {
     if (isDisabled(entry)) return;
     if (!startBusy({ kind: "apply", label: "Changing startup apps" })) return;
-    error = null;
+    toggleError = null;
     changing = entry.id;
     const api = backend.api;
     try {
@@ -97,7 +99,7 @@
       }
       await api.setStartupEnabled(entry.id, !entry.enabled);
     } catch (e) {
-      error = `Couldn't change ${entry.name}: ${message(e)}`;
+      toggleError = `Couldn't change ${entry.name}: ${message(e)}`;
     } finally {
       changing = null;
       stopBusy();
@@ -143,14 +145,26 @@
       Apps that start when you sign in. Turn one off to stop it launching; you can turn it back on any time.
     </p>
 
-    {#if error}
+    {#if error || toggleError}
       <div class="notice" role="alert">
         <TriangleAlert size={16} strokeWidth={1.75} aria-hidden="true" />
-        <p>{error}</p>
+        <p>{toggleError ?? error}</p>
         {#if app.backendAvailable}
-          <button type="button" class="btn btn-ghost btn-sm" onclick={load} disabled={busy || loading}>Retry</button>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            onclick={() => {
+              toggleError = null;
+              void load();
+            }}
+            disabled={busy || loading}
+          >Retry</button>
         {/if}
       </div>
+    {/if}
+
+    {#if app.overview?.journalError}
+      <p class="note muted">Changes are paused until the undo record is fixed, so these switches are locked.</p>
     {/if}
 
     {#if hasPerUser && !perUserAllowed}
@@ -180,8 +194,9 @@
               role="switch"
               aria-checked={e.enabled}
               aria-label={e.name}
+              aria-disabled={isDisabled(e)}
+              title={e.perUser && !perUserAllowed ? "Only the signed-in account can change this" : undefined}
               class="switch"
-              disabled={isDisabled(e)}
               onclick={() => toggle(e)}
             ><span class="knob"></span></button>
             <span class="text">
@@ -400,7 +415,7 @@
     background: var(--on-accent);
   }
 
-  .switch:disabled {
+  .switch[aria-disabled="true"] {
     cursor: not-allowed;
     opacity: 0.55;
   }
