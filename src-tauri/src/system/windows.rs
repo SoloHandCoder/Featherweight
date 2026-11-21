@@ -556,18 +556,35 @@ fn check_task_path(path: &str) -> Result<(), SysError> {
     Ok(())
 }
 
-/// Whether the Task Scheduler cache knows `path` (readable without elevation,
-/// unlike the task XML of system tasks).
+/// The task's definition file under `<System32>\Tasks`.
+fn task_file(path: &str) -> PathBuf {
+    system32().join("Tasks").join(path.trim_start_matches('\\'))
+}
+
+/// A task exists only if the Task Scheduler cache lists it AND its definition
+/// file exists: Windows can leave a stale cache key behind for a task a newer
+/// build removed. When the Tasks folder can't be read (not elevated), the
+/// cache entry decides.
+fn task_present(in_cache: bool, file_exists: Result<bool, ()>) -> bool {
+    in_cache && file_exists.unwrap_or(true)
+}
+
+/// Whether `path` is a real scheduled task on this PC.
 fn task_exists(path: &str) -> Result<bool, SysError> {
+    let file = task_file(path).try_exists().map_err(|_| ());
+    if file == Ok(false) {
+        return Ok(false); // no definition file: missing, whatever the cache says
+    }
     let sub = format!(
         r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Schedule\TaskCache\Tree\{}",
         path.trim_start_matches('\\')
     );
-    match root(Hive::Hklm).open_subkey_with_flags(&sub, KEY_READ | KEY_WOW64_64KEY) {
-        Ok(_) => Ok(true),
-        Err(e) if is_missing(&e) => Ok(false),
-        Err(e) => Err(map_io(e, "task cache")),
-    }
+    let in_cache = match root(Hive::Hklm).open_subkey_with_flags(&sub, KEY_READ | KEY_WOW64_64KEY) {
+        Ok(_) => true,
+        Err(e) if is_missing(&e) => false,
+        Err(e) => return Err(map_io(e, "task cache")),
+    };
+    Ok(task_present(in_cache, file))
 }
 
 /// Task-level `<Settings><Enabled>`; absent inside `<Settings>` means
@@ -931,6 +948,24 @@ impl System for WindowsSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stale_task_cache_entry_is_not_a_task() {
+        // Newer Windows 11 builds drop tasks (e.g. "Microsoft Compatibility
+        // Appraiser") but leave their TaskCache key behind.
+        assert!(!task_present(true, Ok(false)));
+        assert!(task_present(true, Ok(true)));
+        assert!(!task_present(false, Ok(true)));
+        // Task folder unreadable (not elevated): fall back to the cache.
+        assert!(task_present(true, Err(())));
+        assert!(!task_present(false, Err(())));
+    }
+
+    #[test]
+    fn task_file_path_maps_task_path_under_tasks_folder() {
+        let p = task_file(r"\Microsoft\Windows\Foo\Bar Baz");
+        assert!(p.ends_with(r"Tasks\Microsoft\Windows\Foo\Bar Baz"), "{p:?}");
+    }
 
     #[test]
     fn xml_enabled_reads_settings_block_only() {

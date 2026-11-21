@@ -5,8 +5,9 @@ section = "background"
 level = "safe"
 presets = ["everyday", "gaming"]
 
-# Only tasks present on both Windows 10 22H2 and Windows 11 23H2+ are listed:
-# one missing task makes the whole tweak "not on this PC".
+# A task missing on this PC is skipped; the tweak is "not on this PC" only if
+# none of them exist. Newer Windows 11 builds renamed the Appraiser task to
+# "Microsoft Compatibility Appraiser Exp", so both names are listed.
 
 [[actions]]
 type = "scheduled_task"
@@ -21,4 +22,9 @@ enabled = false
 [[actions]]
 type = "scheduled_task"
 path = '\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser'
+enabled = false
+
+[[actions]]
+type = "scheduled_task"
+path = '\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser Exp'
 enabled = false

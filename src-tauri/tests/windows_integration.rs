@@ -61,6 +61,21 @@ fn missing_task_is_none() {
     assert_eq!(WindowsSystem::new().task_enabled(r"\FwNoSuchTask\Nope").unwrap(), None);
 }
 
+/// A task removed by a newer build whose TaskCache key Windows left behind
+/// must read as missing, not fail (seen on Windows 11 with the old
+/// "Microsoft Compatibility Appraiser"). Read-only. Only meaningful on a PC
+/// that actually has the stale entry; elsewhere it's an ordinary missing task.
+#[test]
+#[ignore]
+fn stale_cached_task_is_none() {
+    let path = r"\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser";
+    let file = std::path::Path::new(r"C:\Windows\System32\Tasks").join(path.trim_start_matches('\\'));
+    if file.exists() {
+        return; // the task really exists on this PC; nothing to check
+    }
+    assert_eq!(WindowsSystem::new().task_enabled(path).unwrap(), None);
+}
+
 #[test]
 #[ignore]
 fn reads_task_state() {
