@@ -101,13 +101,16 @@
     // power plan for another) must put the old one back first, or undoing it
     // afterwards would overwrite the new one. They still wait for the
     // restore point and confirmation steps.
-    let undoReport: UndoReport | null = null;
+    // A holder, so TypeScript doesn't narrow it to null across the closure.
+    const done: { undo: UndoReport | null; step: "apply" | "undo" } = { undo: null, step: "apply" };
     const runUndo = async () => {
-      if (undoIds.length === 0 || undoReport) return;
+      if (undoIds.length === 0 || done.undo) return;
       phase = "undo";
       progress = null;
-      undoReport = await api.undoTweaks(undoIds, false);
-      noteChangedSince(undoReport);
+      done.step = "undo";
+      done.undo = await api.undoTweaks(undoIds, false);
+      done.step = "apply";
+      noteChangedSince(done.undo);
     };
     try {
       let applyGroups: ResultGroup[] = [];
@@ -145,13 +148,24 @@
       }
       // Cancelling at the restore point question stops everything.
       if (!cancelled) await runUndo();
-      if (applyGroups.length > 0 || undoReport) summary?.show(undoReport, applyGroups);
+      if (applyGroups.length > 0 || done.undo) summary?.show(done.undo, applyGroups);
       else {
         nothingChanged = true;
         ran = false;
       }
     } catch (e) {
-      error = `Couldn't apply: ${message(e)}`;
+      if (done.step === "undo") {
+        error = `Couldn't put back: ${message(e)}`;
+      } else if (done.undo) {
+        // The undos already ran: say so, next to what failed to apply.
+        const detail = message(e);
+        const title = (id: string) => app.tweaks.find((t) => t.id === id)?.title ?? id;
+        summary?.show(done.undo, [
+          { label: "Failed to apply", tone: "bad", items: applyIds.map((id) => ({ title: title(id), detail })) },
+        ]);
+      } else {
+        error = `Couldn't apply: ${message(e)}`;
+      }
     } finally {
       unlisten?.();
       stopBusy();
@@ -237,6 +251,9 @@
         {:else}
           <LifeBuoy size={14} strokeWidth={1.75} aria-hidden="true" />
           <p>A restore point is made before the first change.</p>
+          {#if pending.apply.length > 0 && pending.undo.length > 0}
+            <p class="split num">{pending.apply.length} to apply · {pending.undo.length} to put back</p>
+          {/if}
         {/if}
       </div>
       <button
@@ -255,6 +272,7 @@
   <ExplainerPanel
     id={explainerId}
     tweak={selected}
+    wanted={selected ? toggles[selected.id] : false}
     allUsers={!!selected && allUsers.includes(selected.id)}
     onallusers={(on) => {
       const id = selected?.id;
@@ -365,6 +383,12 @@
     height: 100%;
     background: var(--accent);
     transition: width var(--duration) var(--ease);
+  }
+
+  .split {
+    margin-left: auto;
+    white-space: nowrap;
+    color: var(--text);
   }
 
   .error {

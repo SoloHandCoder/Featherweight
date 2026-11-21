@@ -7,6 +7,8 @@
   interface Props {
     id: string;
     tweak: TweakView | null;
+    /** Where the switch is now (may differ from the PC until applied). */
+    wanted?: boolean;
     allUsers: boolean;
     onallusers: (on: boolean) => void;
     onundo: () => void;
@@ -19,6 +21,7 @@
   let {
     id,
     tweak,
+    wanted = false,
     allUsers,
     onallusers,
     onundo,
@@ -29,6 +32,8 @@
 
   const uid = $props.id();
   const on = $derived(tweak?.status.kind === "applied" || tweak?.status.kind === "partial");
+  /** An applied app removal switched off: undo can't bring the apps back. */
+  const offIrreversible = $derived(!!tweak?.irreversible && on && !wanted);
 </script>
 
 <aside {id} class="explainer" aria-labelledby={tweak ? `${uid}-title` : undefined} aria-label={tweak ? undefined : "Details"}>
@@ -54,8 +59,8 @@
           {#if tweak.status.kind === "applied"}
             <span class="ok">Applied</span>
           {:else if tweak.status.kind === "partial"}
-            <span class="ok">Applied</span>
-            <span class="note">Partly applied: some of its values are not set yet.</span>
+            <span class="warn">Partly applied</span>
+            <span class="note">Some of its settings are not set yet.</span>
           {:else}
             Not applied
           {/if}
@@ -85,6 +90,13 @@
         />
         <span>Also remove for all users</span>
       </label>
+    {/if}
+
+    {#if offIrreversible}
+      <div class="changed" role="status">
+        <CircleAlert size={16} strokeWidth={1.75} aria-hidden="true" />
+        <p>Turning this off won't bring removed apps back — reinstall them from the Microsoft Store.</p>
+      </div>
     {/if}
 
     {#if changedSince}
