@@ -19,6 +19,8 @@ pub struct FakeSystem {
     active_scheme: String,
     /// Makes the next MUTATING call fail, then clears itself.
     pub fail_next: Option<SysError>,
+    /// Number of mutating calls that succeed before `fail_next` fires.
+    pub fail_skip: usize,
     /// Scripted PowerShell output keyed by exact script text.
     pub ps_responses: HashMap<String, String>,
     /// Every `(package, all_users)` passed to a successful `remove_appx`.
@@ -50,6 +52,7 @@ impl FakeSystem {
             schemes: HashSet::from([DEFAULT_SCHEME.to_string()]),
             active_scheme: DEFAULT_SCHEME.to_string(),
             fail_next: None,
+            fail_skip: 0,
             ps_responses: HashMap::new(),
             removed_appx: Vec::new(),
             ps_calls: Vec::new(),
@@ -105,6 +108,10 @@ impl FakeSystem {
     }
 
     fn check_fail(&mut self) -> Result<(), SysError> {
+        if self.fail_next.is_some() && self.fail_skip > 0 {
+            self.fail_skip -= 1;
+            return Ok(());
+        }
         match self.fail_next.take() {
             Some(e) => Err(e),
             None => Ok(()),
