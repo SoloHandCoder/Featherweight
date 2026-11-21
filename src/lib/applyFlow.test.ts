@@ -6,6 +6,7 @@ import {
   groupUndoReport,
   mergeUndoReport,
   planApply,
+  restorePointStep,
   resultHeadline,
   runApply,
   storeLink,
@@ -271,5 +272,18 @@ describe("combineGroups and resultHeadline", () => {
     });
     expect(resultHeadline([g("Restored"), g("Changed since")]).title).toBe("Some changes didn't go through");
     expect(resultHeadline([g("Already original")]).title).toBe("Nothing needed changing");
+  });
+});
+
+describe("restorePointStep", () => {
+  it("continues without asking when the restore point was made", async () => {
+    const d = deps({ kind: "created" });
+    expect(await restorePointStep(d)).toBe(true);
+    expect(d.confirmRestoreIssue).not.toHaveBeenCalled();
+  });
+
+  it("returns false when the user cancels at a throttled restore point", async () => {
+    const d = deps({ kind: "throttled" }, { confirmRestoreIssue: vi.fn().mockResolvedValue(false) });
+    expect(await restorePointStep(d)).toBe(false);
   });
 });

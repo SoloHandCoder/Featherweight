@@ -6,6 +6,7 @@
   import Home from "./pages/Home.svelte";
   import Section from "./pages/Section.svelte";
   import UndoAll from "./components/UndoAll.svelte";
+  import Background from "./pages/Background.svelte";
   import Cleanup from "./pages/Cleanup.svelte";
   import { app, navigate, refresh, type Page } from "./lib/state.svelte";
 
@@ -68,6 +69,8 @@
       <Home />
     {:else if app.page === "remove" || app.page === "gaming"}
       {#key app.page}<Section section={app.page} />{/key}
+    {:else if app.page === "background"}
+      <Background />
     {:else if app.page === "cleanup"}
       <Cleanup />
     {/if}

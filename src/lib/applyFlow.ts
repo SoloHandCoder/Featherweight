@@ -44,8 +44,13 @@ function message(e: unknown): string {
   return String(e);
 }
 
-/** Returns false when the user cancelled at the restore point question. */
-async function restorePointStep(deps: ApplyDeps): Promise<boolean> {
+/**
+ * Makes the session's restore point, asking about problems. Returns false
+ * when the user cancelled at the question. Shared with the startup toggles.
+ */
+export async function restorePointStep(
+  deps: Pick<ApplyDeps, "ensureRestorePoint" | "enableSystemRestore" | "confirmRestoreIssue">,
+): Promise<boolean> {
   let outcome = await deps.ensureRestorePoint();
   let triedEnable = false;
   while (isIssue(outcome)) {

@@ -13,6 +13,7 @@ import type {
   TweakStatus,
   TweakView,
   UndoResult,
+  StartupEntry,
 } from "./types";
 
 const overview: Overview = {
@@ -68,6 +69,15 @@ const junkApps = [
   "Microsoft.People",
   "Microsoft.WindowsMaps",
   "Microsoft.Microsoft3DViewer",
+];
+
+const startup: StartupEntry[] = [
+  { id: "hkcu-run-Discord", name: "Discord", command: String.raw`C:\Users\Sam\AppData\Local\Discord\Update.exe --processStart Discord.exe`, location: "hkcuRun", enabled: true, perUser: true },
+  { id: "hkcu-run-Spotify", name: "Spotify", command: String.raw`C:\Users\Sam\AppData\Roaming\Spotify\Spotify.exe --autostart --minimized`, location: "hkcuRun", enabled: true, perUser: true },
+  { id: "hkcu-run-Steam", name: "Steam", command: String.raw`"C:\Program Files (x86)\Steam\steam.exe" -silent`, location: "hkcuRun", enabled: false, perUser: true },
+  { id: "hklm-run-RtkAudUService", name: "Realtek HD Audio Manager", command: String.raw`"C:\Windows\System32\DriverStore\FileRepository\realtekservice.inf_amd64_8f2a\RtkAudUService64.exe" -background`, location: "hklmRun", enabled: true, perUser: false },
+  { id: "hklm-run-SecurityHealth", name: "Windows Security notification icon", command: String.raw`%windir%\system32\SecurityHealthSystray.exe`, location: "hklmRun", enabled: true, perUser: false },
+  { id: "common-folder-Zoom", name: "Zoom", command: String.raw`C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp\Zoom.lnk`, location: "commonFolder", enabled: true, perUser: false },
 ];
 
 const catalog = [
@@ -194,8 +204,15 @@ export const mockApi: Backend = {
     return { kind: "created" };
   },
   enableSystemRestore: async () => wait(300),
-  listStartup: async () => [],
-  setStartupEnabled: async () => {},
+  listStartup: async () => {
+    await wait(200);
+    return startup.map((e) => ({ ...e }));
+  },
+  setStartupEnabled: async (id, enabled) => {
+    await wait(300);
+    const e = startup.find((x) => x.id === id);
+    if (e) e.enabled = enabled;
+  },
   scanCleanup: async () => {
     await wait(700);
     return [

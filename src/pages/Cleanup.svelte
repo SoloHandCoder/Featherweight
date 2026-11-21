@@ -2,7 +2,7 @@
   import { CircleCheck, TriangleAlert } from "lucide-svelte";
   import ConfirmDialog from "../components/ConfirmDialog.svelte";
   import { backend } from "../lib/backend";
-  import { app, message, BACKEND_UNAVAILABLE } from "../lib/state.svelte";
+  import { app, message, startBusy, stopBusy, BACKEND_UNAVAILABLE } from "../lib/state.svelte";
   import { formatBytes } from "../lib/format";
   import { nextSelection, selectedBytes, selectedTargets } from "../lib/cleanupSelection";
   import type { CleanupReport, CleanupTarget } from "../lib/types";
@@ -65,6 +65,7 @@
   async function run() {
     if (running || scanning) return;
     confirmOpen = false;
+    if (!startBusy({ kind: "cleanup", label: "Cleaning" })) return;
     running = true;
     error = null;
     report = null;
@@ -74,6 +75,7 @@
       error = message(e);
     } finally {
       running = false;
+      stopBusy();
     }
     await scan(true);
   }
