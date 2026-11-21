@@ -1,0 +1,14 @@
+id = "no-explorer-ads"
+title = "No ads in File Explorer"
+description = "Stops File Explorer from showing banners that promote OneDrive and other Microsoft services. Takes effect the next time File Explorer opens."
+section = "remove"
+level = "safe"
+presets = ["everyday", "gaming"]
+
+# File Explorer Options > View > "Show sync provider notifications".
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+name = "ShowSyncProviderNotifications"
+value = { dword = 0 }

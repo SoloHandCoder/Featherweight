@@ -1,0 +1,14 @@
+id = "system-responsiveness"
+title = "Less CPU reserved for background tasks"
+description = "Lowers the share of processor time Windows keeps aside for background tasks while games and media run, from 20% to 10%. Takes effect after a restart."
+section = "gaming"
+level = "advanced"
+
+# Multimedia Class Scheduler: default 20. Microsoft documents that values
+# below 10 are treated as 10, so 10 is the real minimum (0 would be the same).
+[[actions]]
+type = "registry"
+hive = "hklm"
+path = 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
+name = "SystemResponsiveness"
+value = { dword = 10 }

@@ -1,0 +1,24 @@
+id = "disable-telemetry-tasks"
+title = "Turn off diagnostic data tasks"
+description = "Turns off scheduled tasks that collect usage and app compatibility data in the background. Your apps and updates are not affected."
+section = "background"
+level = "safe"
+presets = ["everyday", "gaming"]
+
+# Only tasks present on both Windows 10 22H2 and Windows 11 23H2+ are listed:
+# one missing task makes the whole tweak "not on this PC".
+
+[[actions]]
+type = "scheduled_task"
+path = '\Microsoft\Windows\Customer Experience Improvement Program\Consolidator'
+enabled = false
+
+[[actions]]
+type = "scheduled_task"
+path = '\Microsoft\Windows\Customer Experience Improvement Program\UsbCeip'
+enabled = false
+
+[[actions]]
+type = "scheduled_task"
+path = '\Microsoft\Windows\Application Experience\Microsoft Compatibility Appraiser'
+enabled = false

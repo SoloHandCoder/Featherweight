@@ -1,0 +1,15 @@
+id = "power-ultimate-performance"
+title = "Ultimate Performance power plan"
+description = "Adds and switches to the Ultimate Performance power plan, which keeps the PC at full speed at all times. It uses more power and makes more heat than High Performance."
+section = "gaming"
+level = "advanced"
+exclusive_with = "power-high-performance"
+
+# Windows hides the Ultimate Performance template on most editions, so it is
+# copied (`powercfg /duplicatescheme`) into a fixed Featherweight-owned GUID:
+#   fe1a7e00-5eed-4f00-9c00-0000000000f1
+# Fixed, so re-applying finds the existing copy instead of making another.
+[[actions]]
+type = "power_plan"
+scheme_guid = "fe1a7e00-5eed-4f00-9c00-0000000000f1"
+duplicate_from = "e9a42b02-d5df-448d-aa00-03f14749eb61"

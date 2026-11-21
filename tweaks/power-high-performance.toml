@@ -1,0 +1,15 @@
+id = "power-high-performance"
+title = "High Performance power plan"
+description = "Switches to the High Performance power plan, so the processor doesn't slow down to save power. On a laptop this drains the battery faster."
+section = "gaming"
+level = "safe"
+laptop_level = "advanced"
+presets = ["gaming"]
+exclusive_with = "power-ultimate-performance"
+
+# Built-in High Performance scheme. Some PCs (mostly laptops with Modern
+# Standby) hide it; then this tweak fails with "not found" and changes
+# nothing.
+[[actions]]
+type = "power_plan"
+scheme_guid = "8c5e7fda-e8bf-4a96-9a85-cf2dd2b47a5c"

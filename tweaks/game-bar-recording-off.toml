@@ -1,0 +1,29 @@
+id = "game-bar-recording-off"
+title = "Game Bar recording off"
+description = "Turns off Game Bar's game recording, including recording in the background, which can cost frames. Other recording apps still work."
+section = "gaming"
+level = "safe"
+presets = ["gaming"]
+
+# Settings > Gaming > Captures: capture on/off.
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\GameDVR'
+name = "AppCaptureEnabled"
+value = { dword = 0 }
+
+# Settings > Gaming > Captures > "Record what happened" (background recording).
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\GameDVR'
+name = "HistoricalCaptureEnabled"
+value = { dword = 0 }
+
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'System\GameConfigStore'
+name = "GameDVR_Enabled"
+value = { dword = 0 }

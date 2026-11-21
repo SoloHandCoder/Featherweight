@@ -1,0 +1,14 @@
+id = "game-mode-on"
+title = "Game Mode on"
+description = "Turns on Windows Game Mode, which gives the game you're playing priority over background work. It is on by default, so this just makes sure."
+section = "gaming"
+level = "safe"
+presets = ["gaming"]
+
+# Settings > Gaming > Game Mode.
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\GameBar'
+name = "AutoGameModeEnabled"
+value = { dword = 1 }

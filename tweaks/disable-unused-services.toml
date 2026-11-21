@@ -1,0 +1,29 @@
+id = "disable-unused-services"
+title = "Turn off rarely used services"
+description = "Turns off services almost nobody needs: faxing, offline map downloads, store demo mode and Media Player network sharing. Skip this if you send faxes from this PC."
+section = "background"
+level = "safe"
+presets = ["everyday", "gaming"]
+
+[[actions]]
+type = "service"
+name = "Fax"
+start = "disabled"
+
+# Downloaded Maps Manager.
+[[actions]]
+type = "service"
+name = "MapsBroker"
+start = "disabled"
+
+# Retail Demo Service.
+[[actions]]
+type = "service"
+name = "RetailDemo"
+start = "disabled"
+
+# Windows Media Player Network Sharing Service.
+[[actions]]
+type = "service"
+name = "WMPNetworkSvc"
+start = "disabled"

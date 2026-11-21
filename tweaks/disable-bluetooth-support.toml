@@ -1,0 +1,10 @@
+id = "disable-bluetooth-support"
+title = "Turn off Bluetooth support"
+description = "Turns off the Bluetooth Support Service, so Bluetooth headphones, mice and keyboards may stop working. Don't use this if you rely on any Bluetooth device."
+section = "background"
+level = "advanced"
+
+[[actions]]
+type = "service"
+name = "bthserv"
+start = "disabled"

@@ -1,0 +1,28 @@
+id = "disable-telemetry-services"
+title = "Turn off diagnostic data services"
+description = "Stops the background services that send usage and diagnostic data to Microsoft, and sets diagnostic data to the minimum. Windows Update and security updates keep working."
+section = "background"
+level = "safe"
+presets = ["everyday", "gaming"]
+
+# Connected User Experiences and Telemetry.
+[[actions]]
+type = "service"
+name = "DiagTrack"
+start = "disabled"
+
+# Device Management WAP Push message routing service.
+[[actions]]
+type = "service"
+name = "dmwappushservice"
+start = "disabled"
+
+# Group Policy "Allow Diagnostic Data". 1 = Required (the minimum on Home and
+# Pro; 0 is only honoured on Enterprise/Education and is treated as 1
+# elsewhere).
+[[actions]]
+type = "registry"
+hive = "hklm"
+path = 'SOFTWARE\Policies\Microsoft\Windows\DataCollection'
+name = "AllowTelemetry"
+value = { dword = 1 }

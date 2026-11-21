@@ -1,0 +1,44 @@
+id = "remove-onedrive"
+title = "Uninstall OneDrive"
+description = "Uninstalls the OneDrive app for your account, so it stops syncing and starting with Windows. Files already on this PC stay, and you can reinstall OneDrive later."
+section = "remove"
+level = "advanced"
+irreversible = true
+
+# OneDrive is a Win32 app, not a Store package. Windows ships its installer
+# at System32\OneDriveSetup.exe (Windows 11, and Windows 10 32-bit) or
+# SysWOW64\OneDriveSetup.exe (Windows 10 64-bit); `/uninstall` removes the
+# current user's OneDrive and running it with no arguments installs it again.
+# Only those protected system paths are executed - never a path read from
+# the (user-writable) registry.
+#
+# check prints 1 when no OneDrive.exe is installed (per-user or per-machine).
+[[actions]]
+type = "powershell"
+check = '''
+$exe = @(
+  (Join-Path $env:LOCALAPPDATA 'Microsoft\OneDrive\OneDrive.exe'),
+  (Join-Path $env:ProgramFiles 'Microsoft OneDrive\OneDrive.exe'),
+  (Join-Path ${env:ProgramFiles(x86)} 'Microsoft OneDrive\OneDrive.exe')
+)
+if (@($exe | Where-Object { Test-Path -LiteralPath $_ }).Count -eq 0) { '1' } else { '0' }
+'''
+apply = '''
+$ErrorActionPreference = 'Stop'
+$setup = @(
+  (Join-Path $env:SystemRoot 'System32\OneDriveSetup.exe'),
+  (Join-Path $env:SystemRoot 'SysWOW64\OneDriveSetup.exe')
+) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $setup) { throw 'OneDriveSetup.exe was not found in the Windows folder.' }
+Stop-Process -Name OneDrive -Force -ErrorAction SilentlyContinue
+Start-Process -FilePath $setup -ArgumentList '/uninstall' -Wait
+'''
+undo = '''
+$ErrorActionPreference = 'Stop'
+$setup = @(
+  (Join-Path $env:SystemRoot 'System32\OneDriveSetup.exe'),
+  (Join-Path $env:SystemRoot 'SysWOW64\OneDriveSetup.exe')
+) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $setup) { throw 'OneDriveSetup.exe was not found in the Windows folder.' }
+Start-Process -FilePath $setup -Wait
+'''

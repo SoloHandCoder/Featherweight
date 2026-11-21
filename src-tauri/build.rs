@@ -7,6 +7,10 @@ fn main() {
     tauri_build::try_build(tauri_build::Attributes::new().windows_attributes(windows))
         .expect("failed to run tauri-build");
 
+    // The tweak catalog is embedded with include_dir!, which cargo doesn't
+    // track; rebuild when any file under tweaks/ is added, removed or edited.
+    println!("cargo:rerun-if-changed=../tweaks");
+
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         let manifest = std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").unwrap())
             .join("app.manifest");
