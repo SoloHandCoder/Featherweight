@@ -135,16 +135,17 @@ impl<S: System> Engine<S> {
         None
     }
 
-    /// Observes every action. `Ok(None)` = some action is missing on this PC.
-    fn observe_all(&mut self, t: &TweakDef) -> Result<Option<Vec<Snapshot>>, SysError> {
+    /// Observes every action. `None` entries are actions that do not exist on
+    /// this PC (e.g. a service absent on some editions).
+    fn observe_all(&mut self, t: &TweakDef) -> Result<Vec<Option<Snapshot>>, SysError> {
         let mut out = Vec::with_capacity(t.actions.len());
         for a in &t.actions {
-            match actions::observe(a, &mut self.sys)? {
-                Observed::Present(s) => out.push(s),
-                Observed::NotApplicable => return Ok(None),
-            }
+            out.push(match actions::observe(a, &mut self.sys)? {
+                Observed::Present(s) => Some(s),
+                Observed::NotApplicable => None,
+            });
         }
-        Ok(Some(out))
+        Ok(out)
     }
 
     pub fn status(&mut self, id: &str) -> TweakStatus {
@@ -155,18 +156,18 @@ impl<S: System> Engine<S> {
             return TweakStatus::NotApplicable(r);
         }
         let observed = match self.observe_all(&t) {
-            Ok(Some(o)) => o,
-            Ok(None) => return TweakStatus::NotApplicable(NaReason::MissingOnThisPc),
+            Ok(o) => o,
             // An unreadable value is treated as "not at target".
             Err(_) => return TweakStatus::NotApplied,
         };
-        let at = t
-            .actions
-            .iter()
-            .zip(&observed)
-            .filter(|(a, o)| actions::target(a) == **o)
-            .count();
-        if at == t.actions.len() {
+        // Only actions present on this PC count.
+        let present: Vec<_> =
+            t.actions.iter().zip(&observed).filter_map(|(a, o)| o.as_ref().map(|o| (a, o))).collect();
+        if present.is_empty() {
+            return TweakStatus::NotApplicable(NaReason::MissingOnThisPc);
+        }
+        let at = present.iter().filter(|(a, o)| actions::target(a) == **o).count();
+        if at == present.len() {
             TweakStatus::Applied
         } else if at == 0 {
             TweakStatus::NotApplied
@@ -203,16 +204,24 @@ impl<S: System> Engine<S> {
             return ApplyOutcome::NotApplicable(r);
         }
         let observed = match self.observe_all(t) {
-            Ok(Some(o)) => o,
-            Ok(None) => return ApplyOutcome::NotApplicable(NaReason::MissingOnThisPc),
+            Ok(o) => o,
             Err(e) => return ApplyOutcome::Failed(e.to_string()),
         };
-        if t.actions.iter().zip(&observed).all(|(a, o)| actions::target(a) == *o) {
+        if observed.iter().all(Option::is_none) {
+            return ApplyOutcome::NotApplicable(NaReason::MissingOnThisPc);
+        }
+        if t.actions
+            .iter()
+            .zip(&observed)
+            .all(|(a, o)| o.as_ref().is_none_or(|o| actions::target(a) == *o))
+        {
             return ApplyOutcome::AlreadyApplied;
         }
 
         let mut done: Vec<Done> = Vec::new();
         for (index, (a, before)) in t.actions.iter().zip(observed).enumerate() {
+            // Absent on this PC: nothing to apply, nothing to journal.
+            let Some(before) = before else { continue };
             let after = actions::target(a);
             if before == after {
                 // Already at target: leave its (possibly original) journal entry alone.
@@ -432,6 +441,25 @@ name = "V"
 value = { dword = 1 }
 "#;
 
+    /// Two services only (no registry action), so it can be fully missing.
+    const TWEAK_SVCS: &str = r#"
+id = "svcs"
+title = "Services"
+description = "D"
+section = "background"
+level = "safe"
+
+[[actions]]
+type = "service"
+name = "SvcX"
+start = "disabled"
+
+[[actions]]
+type = "service"
+name = "SvcY"
+start = "disabled"
+"#;
+
     const TWEAK_NEW_BUILD: &str = r#"
 id = "newbuild"
 title = "New build only"
@@ -492,6 +520,7 @@ reinstall = "ms-windows-store://pdp/?ProductId=9NBLGGH18846"
         let catalog = Catalog::from_strs(&[
             TWEAK_A,
             TWEAK_B,
+            TWEAK_SVCS,
             TWEAK_NEW_BUILD,
             TWEAK_USER,
             TWEAK_APPX,
@@ -548,14 +577,46 @@ reinstall = "ms-windows-store://pdp/?ProductId=9NBLGGH18846"
     }
 
     #[test]
-    fn status_not_applicable_on_missing_service() {
+    fn all_actions_missing_is_not_applicable() {
         let d = tempfile::tempdir().unwrap();
-        let sys = FakeSystem::new().with_reg(Hive::Hklm, r"Software\A", "V", RegData::Dword(0));
+        let mut e = engine_with(base_sys(), &d);
+        assert_eq!(e.status("svcs"), TweakStatus::NotApplicable(NaReason::MissingOnThisPc));
+        let out = apply_ids(&mut e, &["svcs"]);
+        assert_eq!(out, vec![("svcs".into(), ApplyOutcome::NotApplicable(NaReason::MissingOnThisPc))]);
+        assert!(e.journal.all().is_empty());
+    }
+
+    #[test]
+    fn status_ignores_missing_actions_when_some_present() {
+        let d = tempfile::tempdir().unwrap();
+        let sys = base_sys().with_service("SvcX", StartType::Automatic);
         let mut e = engine_with(sys, &d);
-        assert_eq!(e.status("a"), TweakStatus::NotApplicable(NaReason::MissingOnThisPc));
-        let out = apply_ids(&mut e, &["a"]);
-        assert_eq!(out, vec![("a".into(), ApplyOutcome::NotApplicable(NaReason::MissingOnThisPc))]);
-        assert_eq!(reg_a(&e), Some(RegData::Dword(0)), "nothing changed");
+        assert_eq!(e.status("svcs"), TweakStatus::NotApplied);
+        e.sys.set_service_start("SvcX", StartType::Disabled).unwrap();
+        assert_eq!(e.status("svcs"), TweakStatus::Applied);
+    }
+
+    #[test]
+    fn apply_skips_missing_action_and_applies_rest() {
+        let d = tempfile::tempdir().unwrap();
+        let sys = base_sys().with_service("SvcX", StartType::Automatic);
+        let mut e = engine_with(sys, &d);
+        let out = apply_ids(&mut e, &["svcs"]);
+        assert_eq!(out, vec![("svcs".into(), ApplyOutcome::Applied)]);
+        assert_eq!(e.sys.service_start("SvcX").unwrap(), Some(StartType::Disabled));
+        assert_eq!(e.sys.service_start("SvcY").unwrap(), None, "missing service untouched");
+        let entries = e.journal.for_tweak("svcs");
+        assert_eq!(entries.len(), 1, "only the present action is journaled");
+        assert_eq!(entries[0].action_index, 0);
+    }
+
+    #[test]
+    fn already_applied_when_present_actions_at_target() {
+        let d = tempfile::tempdir().unwrap();
+        let sys = base_sys().with_service("SvcY", StartType::Disabled);
+        let mut e = engine_with(sys, &d);
+        let out = apply_ids(&mut e, &["svcs"]);
+        assert_eq!(out, vec![("svcs".into(), ApplyOutcome::AlreadyApplied)]);
         assert!(e.journal.all().is_empty());
     }
 
