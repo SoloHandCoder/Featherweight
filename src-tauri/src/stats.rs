@@ -1,5 +1,4 @@
 //! Numbers shown on the Home screen.
-#![allow(dead_code)]
 
 use crate::system::{SysError, System};
 use serde::Serialize;

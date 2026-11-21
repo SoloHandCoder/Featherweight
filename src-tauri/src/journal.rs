@@ -1,6 +1,5 @@
 //! Crash-safe per-value undo journal. The engine records an entry BEFORE
 //! applying an action and removes it after a successful undo.
-#![allow(dead_code)]
 
 use crate::model::{Snapshot, ValueKey};
 use serde::{Deserialize, Serialize};
@@ -51,12 +50,10 @@ pub fn now_rfc3339() -> String {
 }
 
 impl Journal {
-    /// `%ProgramData%\Featherweight\journal.json` (fallback `C:\ProgramData`).
-    pub fn default_path() -> PathBuf {
-        let base = std::env::var_os("ProgramData")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"));
-        base.join("Featherweight").join("journal.json")
+    /// A journal that holds nothing and can never be written (used when the
+    /// real one can't be trusted; commands refuse to change anything then).
+    pub fn unavailable() -> Journal {
+        Journal { path: PathBuf::new(), entries: Vec::new() }
     }
 
     /// Missing file yields an empty journal; a bad file is `Corrupt` and untouched.
@@ -127,6 +124,9 @@ impl Journal {
             version: 1,
             entries: self.entries.clone(),
         };
+        if self.path.as_os_str().is_empty() {
+            return Err(JournalError::Io(std::io::Error::other("the undo journal is unavailable")));
+        }
         let json = serde_json::to_vec_pretty(&file)
             .map_err(|e| JournalError::Serialize(e.to_string()))?;
         if let Some(dir) = self.path.parent() {

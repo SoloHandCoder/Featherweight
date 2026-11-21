@@ -1,5 +1,4 @@
 //! Environment detection and preset resolution.
-#![allow(dead_code)]
 
 use crate::catalog::TweakDef;
 use crate::engine::{Engine, TweakStatus};

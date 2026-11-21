@@ -1,5 +1,4 @@
 //! Declarative tweak catalog: TOML definitions plus validation.
-#![allow(dead_code)]
 
 mod validate;
 
@@ -7,7 +6,6 @@ use include_dir::{Dir, include_dir};
 use serde::{Deserialize, Serialize};
 
 use crate::model::{Hive, Level, Preset, RegData, Section, StartType, ValueKey};
-#[allow(unused_imports)]
 pub use validate::validate;
 
 static TWEAKS_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../tweaks");
@@ -146,6 +144,7 @@ impl Catalog {
         Ok(Catalog { tweaks })
     }
 
+    #[cfg(test)]
     pub fn from_strs(srcs: &[&str]) -> Result<Catalog, CatalogError> {
         Self::from_named(
             srcs.iter()
@@ -164,13 +163,16 @@ impl Catalog {
             })
             .collect();
         files.sort_by_key(|f| f.path().to_path_buf());
-        Self::from_named(files.iter().map(|f| {
+        let c = Self::from_named(files.iter().map(|f| {
             (
                 f.path().display().to_string(),
                 f.contents_utf8().unwrap_or(""),
             )
         }))
-        .expect("bundled tweak catalog must parse")
+        .expect("bundled tweak catalog must parse");
+        let errs = validate(&c);
+        assert!(errs.is_empty(), "bundled tweak catalog is invalid: {errs:?}");
+        c
     }
 
     pub fn get(&self, id: &str) -> Option<&TweakDef> {

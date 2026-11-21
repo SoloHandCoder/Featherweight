@@ -1,6 +1,5 @@
 //! Apply / undo engine: status checks, journaled apply with per-tweak
 //! rollback, and change-aware undo.
-#![allow(dead_code)]
 
 use std::collections::HashSet;
 

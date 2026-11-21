@@ -1,5 +1,4 @@
 //! Per-action observe / target / apply / restore / describe.
-#![allow(dead_code)]
 
 use crate::catalog::{ActionDef, AllUsers};
 use crate::model::{Hive, RegData, Snapshot, StartType, ValueKey};
@@ -124,6 +123,8 @@ pub fn restore_key<S: System>(
     }
 }
 
+/// Restores one catalog action (test convenience over `restore_key`).
+#[cfg(test)]
 pub fn restore<S: System>(
     a: &ActionDef,
     sys: &mut S,

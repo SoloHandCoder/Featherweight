@@ -1,14 +1,16 @@
 //! Startup apps manager: lists Run-key and Startup-folder entries and toggles
 //! them through the `StartupApproved` registry values (what Task Manager uses).
-#![allow(dead_code)]
 
 use std::path::PathBuf;
+
+use serde::Serialize;
 
 use crate::engine::Engine;
 use crate::model::{Hive, RegData};
 use crate::system::{SysError, System};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum StartupLocation {
     HkcuRun,
     HklmRun,
@@ -17,7 +19,8 @@ pub enum StartupLocation {
     CommonFolder,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct StartupEntry {
     pub id: String,
     pub name: String,

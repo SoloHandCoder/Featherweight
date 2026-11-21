@@ -1,5 +1,4 @@
 //! Junk-file scan and clean. Never follows links out of a target.
-#![allow(dead_code)]
 
 use crate::system::System;
 use serde::Serialize;
@@ -26,14 +25,14 @@ pub struct CleanupReport {
 /// Well-known folders from the OS APIs (not environment variables, which a
 /// less-privileged process could influence).
 #[cfg(windows)]
-mod known {
+pub(crate) mod known {
     use std::path::PathBuf;
     use windows::Win32::System::Com::CoTaskMemFree;
     use windows::Win32::Storage::FileSystem::{GetTempPath2W, GetTempPathW};
     use windows::Win32::System::SystemInformation::GetWindowsDirectoryW;
     use windows::Win32::UI::Shell::{
-        FOLDERID_LocalAppData, FOLDERID_Profile, FOLDERID_ProgramFiles, FOLDERID_ProgramFilesX86,
-        KF_FLAG_DEFAULT, SHGetKnownFolderPath,
+        FOLDERID_CommonStartup, FOLDERID_LocalAppData, FOLDERID_Profile, FOLDERID_ProgramData,
+        FOLDERID_ProgramFiles, FOLDERID_ProgramFilesX86, FOLDERID_Startup, KF_FLAG_DEFAULT, SHGetKnownFolderPath,
     };
     use windows::core::GUID;
 
@@ -85,10 +84,19 @@ mod known {
     pub fn program_files_x86() -> Option<PathBuf> {
         folder(&FOLDERID_ProgramFilesX86)
     }
+    pub fn program_data() -> Option<PathBuf> {
+        folder(&FOLDERID_ProgramData)
+    }
+    pub fn startup() -> Option<PathBuf> {
+        folder(&FOLDERID_Startup)
+    }
+    pub fn common_startup() -> Option<PathBuf> {
+        folder(&FOLDERID_CommonStartup)
+    }
 }
 
 #[cfg(not(windows))]
-mod known {
+pub(crate) mod known {
     use std::path::PathBuf;
     fn env(v: &str) -> Option<PathBuf> {
         std::env::var_os(v).filter(|x| !x.is_empty()).map(PathBuf::from)
@@ -215,6 +223,7 @@ fn is_link(m: &fs::Metadata) -> bool {
 }
 
 /// Directory-flavoured link (junction or dir symlink) needs `remove_dir`.
+#[cfg(not(windows))]
 fn is_dir_link(m: &fs::Metadata) -> bool {
     #[cfg(windows)]
     {

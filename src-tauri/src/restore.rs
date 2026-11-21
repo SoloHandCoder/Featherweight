@@ -1,6 +1,5 @@
 //! One system restore point per session, before the first change.
 
-#![allow(dead_code)] // wired up by a later task
 use crate::system::{SysError, System};
 use serde::Serialize;
 

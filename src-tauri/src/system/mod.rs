@@ -1,6 +1,5 @@
 //! Abstraction over the Windows facilities Featherweight touches, so the
 //! engine can be tested against an in-memory fake.
-#![allow(dead_code)]
 
 use crate::model::{Hive, RegData, StartType};
 

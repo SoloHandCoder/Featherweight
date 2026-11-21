@@ -1,5 +1,4 @@
 //! Core data types shared across the engine, journal and catalog.
-#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
 
