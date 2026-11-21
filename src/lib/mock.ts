@@ -196,8 +196,20 @@ export const mockApi: Backend = {
   enableSystemRestore: async () => wait(300),
   listStartup: async () => [],
   setStartupEnabled: async () => {},
-  scanCleanup: async () => [],
-  runCleanup: async () => ({ freedBytes: 0, skippedFiles: 0 }),
+  scanCleanup: async () => {
+    await wait(700);
+    return [
+      { id: "temp", label: "Temporary files", paths: ["%TEMP%"], bytes: 1_288_490_188, needsServiceStop: null },
+      { id: "wu-cache", label: "Windows Update cache", paths: ["SoftwareDistribution\\Download"], bytes: 2_254_857_830, needsServiceStop: "wuauserv" },
+      { id: "thumbnails", label: "Thumbnail cache", paths: ["Explorer\\thumbcache_*.db"], bytes: 146_800_640, needsServiceStop: null },
+      { id: "crash-dumps", label: "Crash dumps and error reports", paths: ["%LOCALAPPDATA%\\CrashDumps"], bytes: 524_288_000, needsServiceStop: null },
+      { id: "delivery-opt", label: "Delivery Optimization cache", paths: ["DeliveryOptimization\\Cache"], bytes: 0, needsServiceStop: null },
+    ];
+  },
+  runCleanup: async (ids) => {
+    await wait(900);
+    return { freedBytes: ids.length * 700_000_000, skippedFiles: 12 };
+  },
   onApplyProgress: async (cb) => {
     listeners.add(cb);
     return () => listeners.delete(cb);

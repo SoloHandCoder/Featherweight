@@ -6,6 +6,7 @@
   import Home from "./pages/Home.svelte";
   import Section from "./pages/Section.svelte";
   import UndoAll from "./components/UndoAll.svelte";
+  import Cleanup from "./pages/Cleanup.svelte";
   import { app, navigate, refresh, type Page } from "./lib/state.svelte";
 
   const titles: Record<Page, string> = {
@@ -67,6 +68,8 @@
       <Home />
     {:else if app.page === "remove" || app.page === "gaming"}
       {#key app.page}<Section section={app.page} />{/key}
+    {:else if app.page === "cleanup"}
+      <Cleanup />
     {/if}
   </main>
 </div>
