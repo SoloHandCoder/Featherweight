@@ -345,6 +345,39 @@ impl<S: System> Drop for Restart<'_, S> {
     }
 }
 
+const ATTR_DIR: u32 = 0x10;
+const ATTR_REPARSE: u32 = 0x400;
+
+#[derive(Debug, PartialEq, Eq)]
+enum Action {
+    Refuse,
+    DeleteLink,
+    DeleteDir,
+    DeleteFile,
+}
+
+/// What to do with an opened object, from its attributes and the final path
+/// of that same handle. Anything not provably inside `root` is refused,
+/// links included.
+fn decide(attrs: u32, final_path: Option<&str>, root: &str) -> Action {
+    match final_path {
+        Some(fp) if path_within(fp, root) => {}
+        _ => return Action::Refuse,
+    }
+    if attrs & ATTR_REPARSE != 0 {
+        Action::DeleteLink
+    } else if attrs & ATTR_DIR != 0 {
+        Action::DeleteDir
+    } else {
+        Action::DeleteFile
+    }
+}
+
+/// Drops the `\\?\` prefix of a final path so it can be validated.
+fn strip_verbatim(p: &str) -> &str {
+    p.strip_prefix(r"\\?\").unwrap_or(p)
+}
+
 /// Target paths that pass validation (others are ignored entirely).
 fn valid_paths(t: &CleanupTarget) -> Vec<&PathBuf> {
     let protected = protected_paths();
@@ -356,7 +389,7 @@ fn valid_paths(t: &CleanupTarget) -> Vec<&PathBuf> {
 /// junction mid-clean can never redirect the delete outside the root.
 #[cfg(windows)]
 mod winfs {
-    use super::{CleanupReport, measure, path_within};
+    use super::{ATTR_DIR, ATTR_REPARSE, Action, CleanupReport, decide, measure};
     use std::os::windows::ffi::OsStrExt;
     use std::path::Path;
     use windows::Win32::Foundation::{CloseHandle, HANDLE};
@@ -371,8 +404,6 @@ mod winfs {
     };
     use windows::core::PCWSTR;
 
-    const ATTR_DIR: u32 = 0x10;
-    const ATTR_REPARSE: u32 = 0x400;
     /// Others may read/write but not delete/rename while we hold the handle.
     const SHARE_RW: FILE_SHARE_MODE = FILE_SHARE_MODE(3);
 
@@ -432,13 +463,16 @@ mod winfs {
 
     /// Canonical (final) path of a cleanable root, or `None` if the root is
     /// missing, not a directory, or itself a reparse point.
-    pub fn canonical_root(path: &Path) -> Option<String> {
+    /// The returned handle must be kept open for the whole clean: it has no
+    /// share-delete, so the root cannot be renamed or swapped meanwhile.
+    pub fn open_root(path: &Path) -> Option<(H, String)> {
         let h = open(path, FILE_READ_ATTRIBUTES).ok()?;
         let i = info(&h)?;
         if i.dwFileAttributes & ATTR_REPARSE != 0 || i.dwFileAttributes & ATTR_DIR == 0 {
             return None;
         }
-        final_path(&h)
+        let fp = final_path(&h)?;
+        Some((h, fp))
     }
 
     /// Marks the object behind `h` for deletion (never follows anything).
@@ -492,22 +526,22 @@ mod winfs {
             rep.skipped_files += 1;
             return;
         };
-        if i.dwFileAttributes & ATTR_REPARSE != 0 {
-            // A link: delete the link itself through this handle, nothing else.
+        // Containment is checked on EVERY handle (for a link opened with
+        // OPEN_REPARSE_POINT this is the link's own path) before any delete.
+        let fp = final_path(&h);
+        let action = decide(i.dwFileAttributes, fp.as_deref(), root);
+        if action == Action::Refuse {
+            rep.skipped_files += 1;
+            return;
+        }
+        if action == Action::DeleteLink {
+            // Delete the link itself through this handle, nothing else.
             if !set_delete(&h) {
                 rep.skipped_files += 1;
             }
             return;
         }
-        // The object we hold must really live inside the canonical root.
-        match final_path(&h) {
-            Some(fp) if path_within(&fp, root) => {}
-            _ => {
-                rep.skipped_files += 1;
-                return;
-            }
-        }
-        if i.dwFileAttributes & ATTR_DIR != 0 {
+        if action == Action::DeleteDir {
             // `h` pins the directory (no share-delete), so it cannot be swapped
             // while we enumerate it.
             if let Ok(rd) = std::fs::read_dir(path) {
@@ -527,17 +561,28 @@ mod winfs {
     }
 }
 
-/// Canonical root for deletion; `None` refuses the path.
-fn canonical_root(root: &Path) -> Option<String> {
+/// Keeps the root directory pinned (no share-delete) while it is cleaned.
+#[cfg(windows)]
+type RootHold = winfs::H;
+#[cfg(not(windows))]
+type RootHold = ();
+
+/// Opens a root for cleaning: returns the pin and its canonical path, or
+/// `None` if it is missing, a link, or (once canonical) fails validation.
+fn open_root(root: &Path, protected: &[PathBuf]) -> Option<(RootHold, String)> {
     #[cfg(windows)]
-    {
-        winfs::canonical_root(root)
-    }
+    let (hold, canon) = winfs::open_root(root)?;
     #[cfg(not(windows))]
-    {
+    let (hold, canon) = {
         let m = fs::symlink_metadata(root).ok()?;
-        (m.is_dir() && !is_link(&m)).then(|| root.to_string_lossy().into_owned())
-    }
+        if !m.is_dir() || is_link(&m) {
+            return None;
+        }
+        ((), root.to_string_lossy().into_owned())
+    };
+    // A junction on an ancestor may have moved the real root somewhere
+    // protected, so validate where it really is.
+    validate_target(Path::new(strip_verbatim(&canon)), protected).then_some((hold, canon))
 }
 
 fn delete_entry(p: &Path, root: &str, rep: &mut CleanupReport) {
@@ -550,9 +595,15 @@ fn delete_entry(p: &Path, root: &str, rep: &mut CleanupReport) {
 pub fn clean<S: System>(sys: &mut S, t: &CleanupTarget) -> CleanupReport {
     let mut rep = CleanupReport::default();
     // (canonical root, entries) per valid path; invalid paths are refused.
-    let jobs: Vec<(String, Vec<PathBuf>)> = valid_paths(t)
-        .into_iter()
-        .filter_map(|p| Some((canonical_root(root_of(p))?, entries_of(p))))
+    let protected = protected_paths();
+    let jobs: Vec<(RootHold, String, Vec<PathBuf>)> = t
+        .paths
+        .iter()
+        .filter(|p| validate_target(root_of(p), &protected))
+        .filter_map(|p| {
+            let (hold, canon) = open_root(root_of(p), &protected)?;
+            Some((hold, canon, entries_of(p)))
+        })
         .collect();
     if jobs.is_empty() {
         return rep;
@@ -564,23 +615,20 @@ pub fn clean<S: System>(sys: &mut S, t: &CleanupTarget) -> CleanupReport {
             Ok(true) => _guard = Some(Restart { sys, name }),
             Ok(false) => {}
             Err(e) => {
-                // A stop may have been requested before the error (timeout):
-                // make sure the service is running again. Nothing was asked
-                // of the service if it was absent or access was denied.
-                if !matches!(
-                    e,
-                    crate::system::SysError::NotFound(_) | crate::system::SysError::AccessDenied(_)
-                ) {
+                // Only if the stop request was actually sent (timeout / poll
+                // failure) may the service be down: bring it back. Errors
+                // before that mean the service was never touched.
+                if e.is_stop_sent() {
                     let _ = Restart { sys, name };
                 }
                 // Can't safely delete: report everything as skipped.
                 rep.skipped_files =
-                    jobs.iter().flat_map(|(_, es)| es).map(|e| measure(e).1).sum();
+                    jobs.iter().flat_map(|(_, _, es)| es).map(|e| measure(e).1).sum();
                 return rep;
             }
         }
     }
-    for (root, entries) in &jobs {
+    for (_hold, root, entries) in &jobs {
         for e in entries {
             delete_entry(e, root, &mut rep);
         }
@@ -746,8 +794,44 @@ mod tests {
         let r = clean(&mut sys, &t);
         assert_eq!(r, CleanupReport { freed_bytes: 0, skipped_files: 2 });
         assert!(d.path().join("a.bin").exists());
-        // A failed stop may have half-happened, so a start is always tried.
-        assert_eq!(sys.service_calls, vec!["stop:wuauserv", "start:wuauserv"]);
+        // The stop request never went out, so the service is left alone.
+        assert_eq!(sys.service_calls, vec!["stop:wuauserv"]);
+    }
+
+    #[test]
+    fn decide_refuses_links_and_objects_outside_root() {
+        let root = r"\\?\C:\Users\bob\AppData\Local\Temp";
+        let inside = r"\\?\C:\Users\bob\AppData\Local\Temp\x";
+        // a top-level reparse point whose own path is outside (root swapped)
+        let outside = r"\\?\C:\Documents and Settings";
+        assert_eq!(decide(ATTR_REPARSE | ATTR_DIR, Some(outside), root), Action::Refuse);
+        assert_eq!(decide(ATTR_REPARSE, Some(outside), root), Action::Refuse);
+        assert_eq!(decide(ATTR_REPARSE | ATTR_DIR, None, root), Action::Refuse);
+        assert_eq!(decide(ATTR_REPARSE | ATTR_DIR, Some(inside), root), Action::DeleteLink);
+        assert_eq!(decide(ATTR_DIR, Some(inside), root), Action::DeleteDir);
+        assert_eq!(decide(0x20, Some(inside), root), Action::DeleteFile);
+        assert_eq!(decide(0x20, Some(outside), root), Action::Refuse);
+    }
+
+    #[test]
+    fn canonical_root_is_validated_after_resolution() {
+        let prot: Vec<PathBuf> =
+            vec![PathBuf::from(r"C:\Windows"), PathBuf::from(r"C:\"), PathBuf::from(r"C:\Users\bob")];
+        assert!(!validate_target(Path::new(strip_verbatim(r"\\?\C:\Windows")), &prot));
+        assert!(!validate_target(Path::new(strip_verbatim(r"\\?\C:\Users")), &prot));
+        assert!(validate_target(Path::new(strip_verbatim(r"\\?\C:\Users\bob\Temp")), &prot));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn open_root_refuses_canonical_root_in_protected_folder() {
+        // The real, resolved location of this temp dir is not protected...
+        let d = tempfile::tempdir().unwrap();
+        assert!(open_root(d.path(), &protected_paths()).is_some());
+        // ...but if the (resolved) root were protected, it is refused.
+        let canon = open_root(d.path(), &[]).unwrap().1;
+        let prot = vec![PathBuf::from(strip_verbatim(&canon))];
+        assert!(open_root(d.path(), &prot).is_none());
     }
 
     #[test]

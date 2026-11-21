@@ -195,7 +195,7 @@ impl System for FakeSystem {
         }
         let was = self.running_services.remove(&key);
         if self.stop_then_fail {
-            return Err(SysError::Other("timed out waiting for stop".into()));
+            return Err(SysError::stop_sent(&"timed out waiting for stop"));
         }
         Ok(was)
     }

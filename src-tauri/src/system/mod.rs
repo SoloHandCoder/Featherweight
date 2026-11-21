@@ -19,6 +19,21 @@ pub enum SysError {
     Other(String),
 }
 
+/// Prefix of the `SysError::Other` message of a `stop_service` failure that
+/// happened AFTER the stop request was sent (the service may be stopped).
+const STOP_SENT: &str = "[stop-sent] ";
+
+impl SysError {
+    pub fn stop_sent(msg: &dyn std::fmt::Display) -> SysError {
+        SysError::Other(format!("{STOP_SENT}{msg}"))
+    }
+
+    /// True if this error came from a `stop_service` whose stop was sent.
+    pub fn is_stop_sent(&self) -> bool {
+        matches!(self, SysError::Other(m) if m.starts_with(STOP_SENT))
+    }
+}
+
 pub trait System {
     fn reg_get(&self, hive: Hive, path: &str, name: &str) -> Result<Option<RegData>, SysError>;
     /// `None` deletes the value; keys are created as needed.

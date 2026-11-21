@@ -530,11 +530,16 @@ impl System for WindowsSystem {
         }
         let deadline = Instant::now() + Duration::from_secs(30);
         loop {
-            if query(&svc)?.dwCurrentState == SERVICE_STOPPED {
+            // From here on a stop HAS been requested: failures are marked so
+            // callers know the service may be (partly) stopped.
+            if query(&svc).map_err(|e| SysError::stop_sent(&e))?.dwCurrentState == SERVICE_STOPPED
+            {
                 return Ok(true);
             }
             if Instant::now() >= deadline {
-                return Err(SysError::Other(format!("service {name} did not stop within 30 s")));
+                return Err(SysError::stop_sent(&format!(
+                    "service {name} did not stop within 30 s"
+                )));
             }
             std::thread::sleep(Duration::from_millis(250));
         }
