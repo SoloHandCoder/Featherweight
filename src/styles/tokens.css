@@ -1,0 +1,71 @@
+/* Featherweight design tokens. Everything else references these. */
+:root {
+  /* Surfaces: one dark ground, separated by small tone steps. */
+  --bg: #0f1115;
+  --surface: #15181e;
+  --surface-2: #171a21;
+  --surface-3: #1d212b; /* hover / active nav, pressed ghost */
+  --border: #242833;
+  --border-strong: #2c313c;
+
+  /* Ink */
+  --text: #e7e9ee;
+  --muted: #8a90a0; /* 6.0:1 on --bg, 4.9:1 on --surface-3 */
+  --on-accent: #0b0d12;
+
+  /* Accent. The gradient is reserved for .btn-primary and the logo. */
+  --accent: #38bdf8;
+  --accent-2: #818cf8;
+  --accent-gradient: linear-gradient(135deg, var(--accent), var(--accent-2));
+
+  /* Levels */
+  --safe-bg: #123524;
+  --safe: #6ee7a8;
+  --adv-bg: #3a2a12;
+  --adv: #fbbf6b;
+
+  /* Shape */
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-pill: 999px;
+
+  /* Spacing scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* Type */
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, monospace; /* real code/registry paths only */
+
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+
+  --leading-tight: 1.4;
+  --leading: 1.5;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+
+  /* Layout */
+  --sidebar-width: 200px;
+
+  /* Motion: hover/active feedback only. */
+  --duration: 120ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration: 0ms;
+  }
+}
