@@ -1,0 +1,50 @@
+//! Abstraction over the Windows facilities Featherweight touches, so the
+//! engine can be tested against an in-memory fake.
+#![allow(dead_code)]
+
+use crate::model::{Hive, RegData, StartType};
+
+#[cfg(test)]
+pub mod fake;
+
+#[derive(thiserror::Error, Debug)]
+pub enum SysError {
+    #[error("access denied: {0}")]
+    AccessDenied(String),
+    #[error("not found: {0}")]
+    NotFound(String),
+    #[error("{0}")]
+    Other(String),
+}
+
+pub trait System {
+    fn reg_get(&self, hive: Hive, path: &str, name: &str) -> Result<Option<RegData>, SysError>;
+    /// `None` deletes the value; keys are created as needed.
+    fn reg_set(
+        &mut self,
+        hive: Hive,
+        path: &str,
+        name: &str,
+        value: Option<&RegData>,
+    ) -> Result<(), SysError>;
+    /// `None` = service absent.
+    fn service_start(&self, name: &str) -> Result<Option<StartType>, SysError>;
+    /// `Disabled` also stops the service.
+    fn set_service_start(&mut self, name: &str, start: StartType) -> Result<(), SysError>;
+    /// `None` = task absent.
+    fn task_enabled(&self, path: &str) -> Result<Option<bool>, SysError>;
+    fn set_task_enabled(&mut self, path: &str, enabled: bool) -> Result<(), SysError>;
+    /// `None` = unknown package name on this build.
+    fn appx_installed(&self, package: &str) -> Result<Option<bool>, SysError>;
+    fn remove_appx(&mut self, package: &str, all_users: bool) -> Result<(), SysError>;
+    /// Lowercase GUID.
+    fn active_power_scheme(&self) -> Result<String, SysError>;
+    fn ensure_power_scheme(
+        &mut self,
+        guid: &str,
+        duplicate_from: Option<&str>,
+    ) -> Result<(), SysError>;
+    fn set_power_scheme(&mut self, guid: &str) -> Result<(), SysError>;
+    /// Trimmed stdout.
+    fn run_powershell(&mut self, script: &str) -> Result<String, SysError>;
+}
