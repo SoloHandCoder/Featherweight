@@ -44,7 +44,8 @@ pub enum UndoOutcome {
     Restored,
     AlreadyOriginal,
     ChangedSince(String),
-    ManualReinstall(Option<String>),
+    /// A removed app: `app` is its package name, `hint` its Store product id.
+    ManualReinstall { app: String, hint: Option<String> },
     Failed(String),
 }
 
@@ -341,10 +342,16 @@ impl<S: System> Engine<S> {
         if !at_after && !force {
             return UndoOutcome::ChangedSince(describe_key(&e.key, hint.as_ref()));
         }
-        let outcome = match actions::restore_key(&e.key, &mut self.sys, &e.before, hint.as_ref())
-        {
+        let hint_ref = hint.as_ref();
+        let outcome = match actions::restore_key(&e.key, &mut self.sys, &e.before, hint_ref) {
             Ok(RestoreResult::Done) => UndoOutcome::Restored,
-            Ok(RestoreResult::ManualReinstall(h)) => UndoOutcome::ManualReinstall(h),
+            Ok(RestoreResult::ManualReinstall(hint)) => UndoOutcome::ManualReinstall {
+                app: match &e.key {
+                    ValueKey::Appx { package } => package.clone(),
+                    other => describe_key(other, hint_ref),
+                },
+                hint,
+            },
             Err(err) => return UndoOutcome::Failed(err.to_string()),
         };
         match self.journal.remove(&e.key) {
@@ -502,7 +509,7 @@ level = "safe"
 type = "appx"
 package = "king.com.CandyCrushSaga"
 all_users = "optional"
-reinstall = "ms-windows-store://pdp/?ProductId=9NBLGGH18846"
+reinstall = "9NBLGGH18846"
 "#;
 
     fn env() -> Env {
@@ -819,9 +826,10 @@ reinstall = "ms-windows-store://pdp/?ProductId=9NBLGGH18846"
             u,
             vec![(
                 "candy".into(),
-                vec![UndoOutcome::ManualReinstall(Some(
-                    "ms-windows-store://pdp/?ProductId=9NBLGGH18846".into()
-                ))]
+                vec![UndoOutcome::ManualReinstall {
+                    app: "king.com.CandyCrushSaga".into(),
+                    hint: Some("9NBLGGH18846".into())
+                }]
             )]
         );
     }

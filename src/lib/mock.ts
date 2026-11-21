@@ -179,7 +179,11 @@ function undoOne(id: string, force: boolean): UndoResult {
   const tw = catalog.find((x) => x.id === id);
   if (tw?.irreversible) {
     status.set(id, { kind: "notApplied" });
-    return { id, outcomes: [{ kind: "manualReinstall", hint: tw.reinstallHint }] };
+    const apps = tw.changes.map((c) => /^Remove app "([^"]+)"/.exec(c)?.[1]).filter((a) => a !== undefined);
+    return {
+      id,
+      outcomes: apps.map((app, i) => ({ kind: "manualReinstall", app, hint: i === 0 ? tw.reinstallHint : null })),
+    };
   }
   if (id === "disable-copilot" && !force) {
     return { id, outcomes: [{ kind: "changedSince", what: "TurnOffWindowsCopilot" }] };

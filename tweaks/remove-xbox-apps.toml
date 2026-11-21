@@ -16,11 +16,11 @@ irreversible = true
 type = "appx"
 package = "Microsoft.GamingApp"
 all_users = "optional"
-reinstall = "ms-windows-store://pdp/?ProductId=9MV0B5HZVK9Z"
+reinstall = "9MV0B5HZVK9Z"
 
 # Xbox Console Companion (older Windows 10 installs).
 [[actions]]
 type = "appx"
 package = "Microsoft.XboxApp"
 all_users = "optional"
-reinstall = "ms-windows-store://pdp/?ProductId=9WZDNCRFJBD8"
+reinstall = "9WZDNCRFJBD8"

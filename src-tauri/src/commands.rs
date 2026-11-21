@@ -136,7 +136,8 @@ pub enum UndoOutcomeView {
     AlreadyOriginal,
     /// `what` names the value that something else changed since apply.
     ChangedSince { what: String },
-    ManualReinstall { hint: Option<String> },
+    /// `app` is the removed package's name, `hint` its Store product id.
+    ManualReinstall { app: String, hint: Option<String> },
     Failed { message: String },
 }
 
@@ -146,7 +147,7 @@ impl From<UndoOutcome> for UndoOutcomeView {
             UndoOutcome::Restored => Self::Restored,
             UndoOutcome::AlreadyOriginal => Self::AlreadyOriginal,
             UndoOutcome::ChangedSince(what) => Self::ChangedSince { what },
-            UndoOutcome::ManualReinstall(hint) => Self::ManualReinstall { hint },
+            UndoOutcome::ManualReinstall { app, hint } => Self::ManualReinstall { app, hint },
             UndoOutcome::Failed(message) => Self::Failed { message },
         }
     }
@@ -646,8 +647,50 @@ value = { dword = 1 }
         assert_eq!(j["results"][0]["id"], "candy");
         let outs = j["results"][0]["outcomes"].as_array().unwrap();
         assert_eq!(outs.len(), 2);
-        assert_eq!(outs[0], serde_json::json!({ "kind": "manualReinstall", "hint": "9NBLGGH18846" }));
+        assert_eq!(outs[0], serde_json::json!({ "kind": "manualReinstall", "app": "king.com.CandyCrushSaga", "hint": "9NBLGGH18846" }));
         assert_eq!(outs[1], serde_json::json!({ "kind": "restored" }));
+    }
+
+    #[test]
+    fn undo_of_bundled_app_removal_lists_each_app_with_its_own_store_id() {
+        let d = tempfile::tempdir().unwrap();
+        let catalog = Catalog::bundled();
+        let apps: Vec<(String, Option<String>)> = catalog
+            .get("remove-junk-apps")
+            .unwrap()
+            .actions
+            .iter()
+            .filter_map(|a| match a {
+                ActionDef::Appx { package, reinstall, .. } => Some((package.clone(), reinstall.clone())),
+                _ => None,
+            })
+            .collect();
+        assert!(apps.len() > 1);
+        let mut sys = FakeSystem::new();
+        for (p, _) in &apps {
+            sys = sys.with_appx(p, true);
+        }
+        let journal = Journal::load(d.path().join("journal.json")).unwrap();
+        let env = Env { build: 22631, is_laptop: false, per_user_allowed: true };
+        let mut e = Engine::new(sys, catalog, journal, env);
+        let ids = vec!["remove-junk-apps".to_string()];
+        e.apply(&ids, &Default::default(), &mut |_| {});
+        let j = serde_json::to_value(undo_report(e.undo(&ids, false))).unwrap();
+        let outs = j["results"][0]["outcomes"].as_array().unwrap();
+        assert_eq!(outs.len(), apps.len(), "one outcome per removed app");
+        let mut got: Vec<(String, Option<String>)> = outs
+            .iter()
+            .map(|o| {
+                assert_eq!(o["kind"], "manualReinstall");
+                (o["app"].as_str().unwrap().to_string(), o["hint"].as_str().map(String::from))
+            })
+            .collect();
+        let mut want = apps.clone();
+        got.sort();
+        want.sort();
+        assert_eq!(got, want);
+        let bare = regex::Regex::new(r"^[A-Za-z0-9]+$").unwrap();
+        assert!(got.iter().filter_map(|(_, h)| h.as_deref()).all(|h| bare.is_match(h)));
     }
 
     #[test]

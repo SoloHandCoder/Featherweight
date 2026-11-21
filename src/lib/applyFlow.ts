@@ -169,8 +169,12 @@ export async function runPreset(ids: string[], deps: PresetDeps): Promise<Preset
  */
 export function appName(change: string): string | null {
   const m = /^Remove app "([^"]+)"/.exec(change);
-  if (!m) return null;
-  const base = m[1].split(".").pop() ?? m[1];
+  return m ? packageTitle(m[1]) : null;
+}
+
+/** Friendly name of an Appx package: "king.com.CandyCrushSaga" -> "Candy Crush Saga". */
+export function packageTitle(pkg: string): string {
+  const base = pkg.split(".").pop() || pkg;
   return base
     .replace(/([a-z])([A-Z0-9])/g, "$1 $2")
     .replace(/([0-9A-Z])([A-Z][a-z])/g, "$1 $2");
@@ -228,9 +232,11 @@ export function storeLink(productId: string): string | null {
 }
 
 /**
- * Undo outcomes grouped for ResultSummary, one row per tweak in its most
- * serious group: Failed > Changed since > Reinstall manually > Restored >
- * Already original. Empty groups are left out.
+ * Undo outcomes grouped for ResultSummary. Each tweak gets one row in its
+ * most serious group (Failed > Changed since > Restored > Already original)
+ * for the values it put back, and every app it had removed gets its own
+ * "Reinstall manually" row with that app's Store product id. Empty groups
+ * are left out.
  */
 export function groupUndoReport(report: UndoReport, tweaks: TweakView[]): ResultGroup[] {
   const title = (id: string) => tweaks.find((t) => t.id === id)?.title ?? id;
@@ -241,23 +247,26 @@ export function groupUndoReport(report: UndoReport, tweaks: TweakView[]): Result
   const failed: ResultItem[] = [];
   for (const r of report.results) {
     const item: ResultItem = { id: r.id, title: title(r.id) };
-    const fail = r.outcomes.find((o) => o.kind === "failed");
-    const since = r.outcomes.find((o) => o.kind === "changedSince");
-    const reinstall = r.outcomes.find((o) => o.kind === "manualReinstall");
+    const rest = r.outcomes.filter((o) => o.kind !== "manualReinstall");
+    for (const o of r.outcomes) {
+      if (o.kind !== "manualReinstall") continue;
+      manual.push({
+        id: r.id,
+        title: packageTitle(o.app),
+        ...(o.hint
+          ? { detail: `Reinstall it from the Microsoft Store (product ID ${o.hint})`, storeId: o.hint }
+          : { detail: "Reinstall it from the Microsoft Store" }),
+      });
+    }
+    const fail = rest.find((o) => o.kind === "failed");
+    const since = rest.find((o) => o.kind === "changedSince");
     if (fail) {
       failed.push({ ...item, detail: fail.message });
     } else if (since) {
       changed.push({ ...item, detail: `Something else changed ${since.what} since Featherweight set it` });
-    } else if (reinstall) {
-      manual.push({
-        ...item,
-        ...(reinstall.hint
-          ? { detail: `Reinstall it from the Microsoft Store (product ID ${reinstall.hint})`, storeId: reinstall.hint }
-          : { detail: "Reinstall it from the Microsoft Store" }),
-      });
-    } else if (r.outcomes.some((o) => o.kind === "restored")) {
+    } else if (rest.some((o) => o.kind === "restored")) {
       restored.push(item);
-    } else {
+    } else if (rest.length > 0 || r.outcomes.length === 0) {
       original.push(item);
     }
   }

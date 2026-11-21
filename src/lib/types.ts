@@ -83,7 +83,8 @@ export type UndoOutcome =
   | { kind: "alreadyOriginal" }
   /** `what` names the value something else changed since it was applied. */
   | { kind: "changedSince"; what: string }
-  | { kind: "manualReinstall"; hint: string | null }
+  /** A removed app: `app` is its package name, `hint` its Store product id. */
+  | { kind: "manualReinstall"; app: string; hint: string | null }
   | { kind: "failed"; message: string };
 
 /** commands::UndoResult */

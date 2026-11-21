@@ -572,6 +572,8 @@ mod tests {
     #[test]
     fn bundled_action_values_are_well_formed() {
         let pkg = regex::Regex::new(r"^[A-Za-z0-9._-]+$").unwrap();
+        // A bare Microsoft Store product id; the UI builds the Store link.
+        let product = regex::Regex::new(r"^[A-Za-z0-9]+$").unwrap();
         let guid = regex::Regex::new(
             r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
         )
@@ -582,11 +584,7 @@ mod tests {
                     ActionDef::Appx { package, reinstall, .. } => {
                         assert!(pkg.is_match(package), "{}: bad package {package}", t.id);
                         if let Some(r) = reinstall {
-                            assert!(
-                                r.starts_with("ms-windows-store://pdp/?ProductId="),
-                                "{}: bad reinstall {r}",
-                                t.id
-                            );
+                            assert!(product.is_match(r), "{}: bad reinstall {r}", t.id);
                         }
                     }
                     ActionDef::PowerPlan { scheme_guid, duplicate_from } => {

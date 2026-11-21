@@ -82,7 +82,10 @@
         {forcing === id ? "Restoring" : "Restore anyway"}
       </button>
     {:else if item.storeId && storeLink(item.storeId)}
-      <a class="btn btn-ghost btn-sm store" href={storeLink(item.storeId)} title={storeLink(item.storeId)}>
+      <a class="btn btn-ghost btn-sm store" href={storeLink(item.storeId)}
+        title={storeLink(item.storeId)}
+        aria-label="Open {item.title} in the Microsoft Store"
+      >
         <ExternalLink size={14} strokeWidth={1.75} aria-hidden="true" />
         Microsoft Store
       </a>

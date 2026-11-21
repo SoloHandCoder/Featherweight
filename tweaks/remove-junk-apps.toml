@@ -13,7 +13,7 @@ irreversible = true
 type = "appx"
 package = "king.com.CandyCrushSaga"
 all_users = "always"
-reinstall = "ms-windows-store://pdp/?ProductId=9NBLGGH18846"
+reinstall = "9NBLGGH18846"
 
 [[actions]]
 type = "appx"
@@ -29,25 +29,25 @@ all_users = "always"
 type = "appx"
 package = "Microsoft.MicrosoftSolitaireCollection"
 all_users = "always"
-reinstall = "ms-windows-store://pdp/?ProductId=9WZDNCRFHWD2"
+reinstall = "9WZDNCRFHWD2"
 
 [[actions]]
 type = "appx"
 package = "Clipchamp.Clipchamp"
 all_users = "always"
-reinstall = "ms-windows-store://pdp/?ProductId=9P1J8S7CCWWT"
+reinstall = "9P1J8S7CCWWT"
 
 [[actions]]
 type = "appx"
 package = "Microsoft.BingNews"
 all_users = "always"
-reinstall = "ms-windows-store://pdp/?ProductId=9WZDNCRFHVFW"
+reinstall = "9WZDNCRFHVFW"
 
 [[actions]]
 type = "appx"
 package = "Microsoft.BingWeather"
 all_users = "always"
-reinstall = "ms-windows-store://pdp/?ProductId=9WZDNCRFJ3Q2"
+reinstall = "9WZDNCRFJ3Q2"
 
 [[actions]]
 type = "appx"
@@ -58,13 +58,13 @@ all_users = "always"
 type = "appx"
 package = "Microsoft.WindowsFeedbackHub"
 all_users = "always"
-reinstall = "ms-windows-store://pdp/?ProductId=9NBLGGH4R32N"
+reinstall = "9NBLGGH4R32N"
 
 [[actions]]
 type = "appx"
 package = "Microsoft.Todos"
 all_users = "always"
-reinstall = "ms-windows-store://pdp/?ProductId=9NBLGGH5R558"
+reinstall = "9NBLGGH5R558"
 
 [[actions]]
 type = "appx"
@@ -75,10 +75,10 @@ all_users = "always"
 type = "appx"
 package = "Microsoft.WindowsMaps"
 all_users = "always"
-reinstall = "ms-windows-store://pdp/?ProductId=9WZDNCRDTBVB"
+reinstall = "9WZDNCRDTBVB"
 
 [[actions]]
 type = "appx"
 package = "Microsoft.Microsoft3DViewer"
 all_users = "always"
-reinstall = "ms-windows-store://pdp/?ProductId=9NBLGGH42THS"
+reinstall = "9NBLGGH42THS"

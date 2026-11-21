@@ -302,7 +302,14 @@ describe("groupUndoReport", () => {
           { id: "ads", outcomes: [{ kind: "restored" }, { kind: "alreadyOriginal" }] },
           { id: "recall", outcomes: [{ kind: "alreadyOriginal" }] },
           { id: "x", outcomes: [{ kind: "restored" }, { kind: "changedSince", what: "HKCU\A" }] },
-          { id: "junk", outcomes: [{ kind: "manualReinstall", hint: "9NBLGGH18846" }] },
+          {
+            id: "junk",
+            outcomes: [
+              { kind: "manualReinstall", app: "king.com.CandyCrushSaga", hint: "9NBLGGH18846" },
+              { kind: "manualReinstall", app: "Microsoft.BingNews", hint: "9WZDNCRFHVFW" },
+              { kind: "manualReinstall", app: "Clipchamp.Clipchamp", hint: null },
+            ],
+          },
           { id: "y", outcomes: [{ kind: "changedSince", what: "B" }, { kind: "failed", message: "Denied" }] },
         ],
       },
@@ -319,9 +326,44 @@ describe("groupUndoReport", () => {
       {
         label: "Reinstall manually",
         tone: "muted",
-        items: [{ id: "junk", title: "Title junk", detail: "Reinstall it from the Microsoft Store (product ID 9NBLGGH18846)", storeId: "9NBLGGH18846" }],
+        items: [
+          {
+            id: "junk",
+            title: "Candy Crush Saga",
+            detail: "Reinstall it from the Microsoft Store (product ID 9NBLGGH18846)",
+            storeId: "9NBLGGH18846",
+          },
+          {
+            id: "junk",
+            title: "Bing News",
+            detail: "Reinstall it from the Microsoft Store (product ID 9WZDNCRFHVFW)",
+            storeId: "9WZDNCRFHVFW",
+          },
+          { id: "junk", title: "Clipchamp", detail: "Reinstall it from the Microsoft Store" },
+        ],
       },
       { label: "Failed", tone: "bad", items: [{ id: "y", title: "y", detail: "Denied" }] },
+    ]);
+  });
+
+  it("lists a tweak's restored values and its removed apps separately", () => {
+    const groups = groupUndoReport(
+      {
+        results: [
+          {
+            id: "junk",
+            outcomes: [
+              { kind: "restored" },
+              { kind: "manualReinstall", app: "king.com.CandyCrushSaga", hint: "9NBLGGH18846" },
+            ],
+          },
+        ],
+      },
+      tweaks,
+    );
+    expect(groups.map((g) => [g.label, g.items.map((i) => i.title)])).toEqual([
+      ["Restored", ["Title junk"]],
+      ["Reinstall manually", ["Candy Crush Saga"]],
     ]);
   });
 
