@@ -18,6 +18,31 @@ work inside Sandbox, so do the "updates still work" checks in a VM.
 Write down for each step: build number (`winver`), result (OK / wrong /
 "not on this PC"), and anything odd.
 
+## VirtualBox setup (Windows 11 Home host)
+
+The maintainer's PC runs Windows 11 Home, so there is no Sandbox: every
+pass below runs in a VirtualBox VM. Make two VMs, one Windows 11 23H2+ and
+one Windows 10 22H2, from Microsoft's ISO images.
+
+1. New VM > pick the ISO > type Windows 11 (64-bit) or Windows 10 (64-bit).
+   Give it at least 4 GB RAM, 2 CPUs and a 64 GB disk.
+2. **Windows 11 only:** Settings > System > Motherboard: tick **Enable EFI**
+   and **Enable Secure Boot**; Settings > System > TPM: **v2.0**. Without
+   these, Windows 11 setup stops with "This PC can't run Windows 11".
+3. Install Windows with a local account that is an administrator. For the
+   "different admin" check (section 7) also create a second local admin.
+4. Devices > **Insert Guest Additions CD image**, run
+   `VBoxWindowsAdditions.exe` in the VM, restart. This gives shared
+   clipboard, drag and drop and a resizable screen.
+5. Share the build folder read-only: Settings > Shared Folders > add
+   `src-tauri\target\release` from the host, **Read-only**, Auto-mount.
+   Copy `featherweight.exe` from that share to the VM's desktop.
+6. Shut the VM down and take a **snapshot** ("clean"). Restore it before
+   each pass, so every pass starts from defaults; take another snapshot
+   before anything you want to repeat (e.g. before Undo all).
+7. For the Windows 10 pass, use a 22H2 ISO and **do not** install updates
+   before testing (see section 9), then snapshot it as "unpatched".
+
 ## 0. Set up
 
 1. Build the portable exe on the host: `npm run tauri build` in the repo.
@@ -126,8 +151,104 @@ Start a fresh Sandbox (close and reopen it) so everything is at defaults.
 7. Nothing should be reported as "changed since we touched it" unless you
    changed it by hand.
 
-## 3. Record
+## 3. Startup apps
+
+1. Open Background > **Startup apps**. Compare the list with Task Manager > Startup apps
+   and with `HKCU\...\CurrentVersion\Run`, `HKLM\...\CurrentVersion\Run`
+   (and `WOW6432Node`) and the two Startup folders.
+2. Turn one HKCU entry and one HKLM entry **off**. Before the first change
+   the restore point question appears (same as for tweaks). Check the entry's
+   value in regedit changed the way Task Manager shows "Disabled"
+   (`...\Explorer\StartupApproved\Run`), and Task Manager agrees.
+3. Turn one back **on**: the value returns to exactly what it was.
+4. Turn the other one off again, then use **Undo all** in the sidebar: it is
+   listed, and its value goes back to the recorded before state.
+5. Sign out and in: the apps you left on start, the one you turned off
+   doesn't.
+
+## 4. Cleanup
+
+1. Open the Cleanup page. Each target shows a size; compare "Your temporary
+   files" with `%LOCALAPPDATA%\Temp` (files changed in the last 24 hours
+   are not counted or deleted, so the size can be lower than Explorer's).
+2. Create `%LOCALAPPDATA%\Temp\fw-fresh.txt` just before cleaning; it must
+   still be there afterwards.
+3. Clean "Old Windows Update downloads". During the clean `wuauserv` stops;
+   afterwards check `Get-Service wuauserv` is **Running** again (or back to
+   Stopped if it was stopped before). Then Settings > Windows Update >
+   Check for updates works.
+4. Clean everything. The result shows freed space and any skipped (in-use)
+   files; nothing outside the listed folders is touched (spot-check
+   `%LOCALAPPDATA%`, `C:\Windows\Temp` itself still exists).
+5. If `%TEMP%` points somewhere other than `%LOCALAPPDATA%\Temp` (set it in
+   System > Advanced > Environment Variables, sign out/in), "Your temporary
+   files" shows nothing to clean and that folder is left alone.
+
+## 5. Undo all after a restart of the app
+
+1. Apply three tweaks (one HKCU, one HKLM/service, one task) and turn off
+   one startup app.
+2. Close Featherweight. Check `C:\ProgramData\Featherweight\journal.json`
+   exists, and in an admin PowerShell `icacls C:\ProgramData\Featherweight`
+   shows only `BUILTIN\Administrators` and `NT AUTHORITY\SYSTEM` (no
+   Users, no inheritance). `journal.lock` sits next to the journal.
+3. Reopen Featherweight. The tweaks still show "applied".
+4. **Undo all**: every value goes back to the before state; the journal file
+   is empty of entries afterwards.
+5. While Featherweight is open, start a second copy: a message box says
+   "Featherweight is already running." and no second window opens.
+
+## 6. Restore point
+
+1. On the first change of a session the app makes a restore point. Open
+   `SystemPropertiesProtection.exe` > **System Restore...** > "Show more
+   restore points": a point named **Featherweight** with the current time
+   is listed (type "Modify settings").
+2. A second change in the same session makes no new point.
+3. With System Protection turned off for C:, the app asks; "Turn on System
+   Restore" turns it on (check the dialog) and then makes the point.
+4. Restart the app within 24 hours and change something: it says Windows
+   made one recently (throttled) and lets you continue.
+
+## 7. A different administrator
+
+1. Sign in as the standard or second admin account, then start
+   Featherweight and enter the **other** admin's password at the UAC prompt.
+2. Home shows the banner about a different administrator account; per-user
+   tweaks (e.g. `no-start-ads`, `remove-onedrive`, app removals) show as
+   unavailable, system-wide ones work.
+3. Apply something per-user as admin A (signed in as A), then run
+   Featherweight as admin B and press **Undo all**: A's entries are listed
+   under "Belongs to another account" and A's values are untouched (check
+   in A's session); running again as A undoes them.
+
+## 8. Cold start and console
+
+1. Restart the VM, wait for the desktop to settle, then start Featherweight
+   and time from the UAC prompt being accepted until the Home numbers show.
+   Write it down (target: under 3 s on 2 CPUs; note if the tweak list makes
+   the window feel stuck).
+2. In a dev build (`npm run tauri dev`), open the devtools (right-click >
+   Inspect, or Ctrl+Shift+I) and check the Console for **Content Security
+   Policy** errors or blocked resources while visiting every page, applying,
+   undoing and cleaning. There should be none.
+3. On the Undo summary, click a **Microsoft Store** link. Opening
+   `ms-windows-store:` links from WebView2 is not verified yet: note whether
+   the Store opens on the right app. If it doesn't, the product id is still
+   shown in the row's text to search for by hand.
+
+## 9. Fresh, unpatched Windows 10 22H2
+
+1. Restore the "unpatched" Windows 10 snapshot (no cumulative updates
+   since the 22H2 ISO). Confirm with `winver` (build 19045.xxxx, a low
+   revision).
+2. Start `featherweight.exe`. It must open (no "entry point not found" or
+   missing DLL error, e.g. for `GetTempPath2W`). If WebView2 is missing, the
+   installer build offers to install it; the portable exe needs it present.
+3. Run section 1's Background checks and the Cleanup page once.
+
+## 10. Record
 
 Paste into the PR description: host build(s) tested, the table of results,
 and any tweak that was "not on this PC" or behaved differently from the
-table above.
+table above. Include the cold-start time from section 8.

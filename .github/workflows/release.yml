@@ -32,6 +32,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check the frontend
+        run: npm run check
+
+      - name: Run frontend tests
+        run: npm test
+
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 

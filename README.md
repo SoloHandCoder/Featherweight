@@ -108,7 +108,8 @@ The project counts as a failure if it does any of these, even if it works:
 - **A journal, written first.** Before any change runs, the previous state of each value it touches (each registry value, service and scheduled task) is written to a journal in `%ProgramData%\Featherweight\`. The journal survives reinstalling the app.
 - **Undo this one, or Undo all.** Undoing replays the journal in reverse, either for one tweak or for everything.
 - **The "changed since" rule.** Featherweight only restores a value if it is still what Featherweight set. If Windows Update, you or another tool changed it in the meantime, that item is left alone and reported as changed since, with a **Restore anyway** button if you want the old value back regardless.
-- **No overlaps.** No two tweaks touch the same value, so undoing one never undoes part of another.
+- **No overlaps, except one deliberate pair.** No two tweaks touch the same value, so undoing one never undoes part of another. The one exception is the two power plans (High Performance and Ultimate Performance): both set the active power plan, so they are mutually exclusive, and switching one on switches the other off.
+- **Per account.** Changes to your own account (your HKCU settings and apps) are recorded with your account's ID. If Featherweight later runs as a different Windows account, it leaves those entries alone and says they belong to another account.
 - **Removed apps are reinstalled, not undone.** Apps removed in the Remove section come back by reinstalling them from the Microsoft Store. The app marks these clearly before you apply them. Undoing "Uninstall OneDrive" reinstalls OneDrive, and you sign in again.
 - **Cleanup is final.** Deleted temp and cache files are gone; Windows recreates what it needs.
 - **The restore point** is there as a second safety net if something outside Featherweight's journal goes wrong.
