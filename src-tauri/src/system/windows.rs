@@ -557,18 +557,24 @@ impl System for WindowsSystem {
         let scm = open_scm_with(SC_MANAGER_ENUMERATE_SERVICE)?;
         let mut resume = 0u32;
         let mut total = 0u32;
-        let mut buf = vec![0u8; 64 * 1024];
+        // 8-byte aligned storage for the ENUM_SERVICE_STATUS_PROCESSW array.
+        let mut buf = vec![0u64; 64 * 1024 / 8];
         loop {
             let mut needed = 0u32;
             let mut returned = 0u32;
-            // SAFETY: `buf` is valid for its length; out-pointers are live locals.
+            // SAFETY: the u64 buffer is reinterpreted as `len * 8` bytes of the
+            // same allocation; out-pointers are live locals.
+            let bytes = unsafe {
+                std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), buf.len() * 8)
+            };
+            // SAFETY: `bytes` is valid for its length.
             let r = unsafe {
                 EnumServicesStatusExW(
                     scm.0,
                     SC_ENUM_PROCESS_INFO,
                     SERVICE_WIN32,
                     SERVICE_ACTIVE,
-                    Some(&mut buf),
+                    Some(bytes),
                     &mut needed,
                     &mut returned,
                     Some(&mut resume),
@@ -580,7 +586,7 @@ impl System for WindowsSystem {
                 Ok(()) => return Ok(total),
                 Err(e) if win32_code(&e) == ERROR_MORE_DATA.0 => {
                     if returned == 0 {
-                        buf = vec![0u8; (needed as usize).max(buf.len() * 2)];
+                        buf = vec![0u64; (needed as usize).div_ceil(8).max(buf.len() * 2)];
                     }
                 }
                 Err(e) => return Err(map_win(e, "EnumServicesStatusEx")),

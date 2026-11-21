@@ -35,6 +35,9 @@ pub struct FakeSystem {
     pub service_calls: Vec<String>,
     /// Makes `stop_service` fail (every time) with this message.
     pub fail_stop: Option<String>,
+    /// `stop_service` really stops the service, then reports an error
+    /// (models a timeout after the stop was requested).
+    pub stop_then_fail: bool,
 }
 
 fn rk(hive: Hive, path: &str, name: &str) -> RegKey {
@@ -66,6 +69,7 @@ impl FakeSystem {
             running_services: HashSet::new(),
             service_calls: Vec::new(),
             fail_stop: None,
+            stop_then_fail: false,
         }
     }
 
@@ -189,7 +193,11 @@ impl System for FakeSystem {
         if let Some(m) = &self.fail_stop {
             return Err(SysError::Other(m.clone()));
         }
-        Ok(self.running_services.remove(&key))
+        let was = self.running_services.remove(&key);
+        if self.stop_then_fail {
+            return Err(SysError::Other("timed out waiting for stop".into()));
+        }
+        Ok(was)
     }
 
     fn start_service(&mut self, name: &str) -> Result<(), SysError> {
