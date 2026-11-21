@@ -12,9 +12,11 @@
     meta?: string;
     onselect: () => void;
     onkeydown?: (e: KeyboardEvent) => void;
+    /** Set while a change is running. */
+    disabled?: boolean;
   }
 
-  let { name, description, icon: Icon, selected, meta, onselect, onkeydown }: Props = $props();
+  let { name, description, icon: Icon, selected, meta, onselect, onkeydown, disabled = false }: Props = $props();
 </script>
 
 <button
@@ -24,6 +26,7 @@
   tabindex={selected ? 0 : -1}
   class="card"
   class:selected
+  {disabled}
   onclick={onselect}
   {onkeydown}
 >
@@ -53,7 +56,12 @@
       background-color var(--duration) var(--ease);
   }
 
-  .card:hover {
+  .card:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .card:not(:disabled):hover {
     border-color: var(--border-strong);
     background: var(--surface-3);
   }

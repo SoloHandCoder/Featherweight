@@ -12,6 +12,7 @@ import type {
   Section,
   TweakStatus,
   TweakView,
+  UndoResult,
 } from "./types";
 
 const overview: Overview = {
@@ -46,6 +47,7 @@ function t(
     changes,
     reinstallHint: null,
     allUsersOptional: false,
+    exclusiveWith: null,
     presets,
     ...extra,
   };
@@ -70,10 +72,11 @@ const junkApps = [
 
 const catalog = [
   t("remove-junk-apps", "Remove preinstalled junk apps", "remove", "safe", both,
-    junkApps.map((p) => `Remove app "${p}" (all users)`), { irreversible: true, description:
+    junkApps.map((p) => `Remove app "${p}" (all users)`), { irreversible: true, reinstallHint: "9NBLGGH18846", description:
     "Removes games and apps that come preinstalled, like Candy Crush, Solitaire, Clipchamp and News, for every account on this PC. You can reinstall most of them from the Microsoft Store." }),
   t("block-suggested-app-installs", "Stop Windows installing suggested apps", "remove", "safe", both,
-    [`${CDM}\\SilentInstalledAppsEnabled = 0 (DWORD)`], { perUser: true }),
+    [`${CDM}\\SilentInstalledAppsEnabled = 0 (DWORD)`], { perUser: true, description:
+    "Stops Windows quietly installing promoted apps and games from the Store." }),
   t("disable-copilot", "Turn off Copilot in Windows", "remove", "safe", both,
     [String.raw`HKCU\Software\Policies\Microsoft\Windows\WindowsCopilot\TurnOffWindowsCopilot = 1 (DWORD)`],
     { perUser: true, status: { kind: "applied" } }),
@@ -86,14 +89,16 @@ const catalog = [
     { perUser: true }),
   t("no-start-ads", "No ads or suggestions in Start and Settings", "remove", "safe", both,
     [`${CDM}\\SystemPaneSuggestionsEnabled = 0 (DWORD)`, `${CDM}\\SubscribedContent-338388Enabled = 0 (DWORD)`],
-    { perUser: true, status: { kind: "partial" } }),
+    { perUser: true, status: { kind: "partial" }, description:
+    "Stops Windows showing suggested apps and promotions in the Start menu and the Settings app." }),
   t("no-lockscreen-ads", "No tips or ads on the lock screen", "remove", "safe", both,
     [`${CDM}\\RotatingLockScreenOverlayEnabled = 0 (DWORD)`], { perUser: true }),
   t("no-explorer-ads", "No ads in File Explorer", "remove", "safe", both,
     [String.raw`HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\ShowSyncProviderNotifications = 0 (DWORD)`],
     { perUser: true }),
   t("remove-onedrive", "Uninstall OneDrive", "remove", "advanced", [],
-    ["PowerShell: OneDriveSetup.exe /uninstall"], { irreversible: true, perUser: true }),
+    ["PowerShell: OneDriveSetup.exe /uninstall"], { irreversible: true, perUser: true, description:
+    "Uninstalls OneDrive for your account. Files already in your OneDrive folder stay on this PC." }),
   t("remove-xbox-apps", "Remove Xbox apps", "remove", "advanced", [],
     ['Remove app "Microsoft.GamingApp"', 'Remove app "Microsoft.XboxApp"'],
     { irreversible: true, allUsersOptional: true }),
@@ -108,9 +113,9 @@ const catalog = [
   t("disable-bluetooth-support", "Turn off Bluetooth support", "background", "advanced", [],
     ['Service "bthserv" → Disabled']),
   t("power-high-performance", "High Performance power plan", "gaming", "safe", ["gaming"],
-    ["Power plan → High Performance"]),
+    ["Power plan → High Performance"], { exclusiveWith: "power-ultimate-performance" }),
   t("power-ultimate-performance", "Ultimate Performance power plan", "gaming", "advanced", [],
-    ["Power plan → Ultimate Performance"]),
+    ["Power plan → Ultimate Performance"], { exclusiveWith: "power-high-performance" }),
   t("game-mode-on", "Game Mode on", "gaming", "safe", ["gaming"],
     [String.raw`HKCU\Software\Microsoft\GameBar\AutoGameModeEnabled = 1 (DWORD)`],
     { perUser: true, status: { kind: "applied" } }),
@@ -130,6 +135,21 @@ const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function views(): TweakView[] {
   return catalog.map(({ presets: _p, ...v }) => ({ ...v, status: status.get(v.id)! }));
+}
+
+/** Copilot's value was "changed since" until forced; irreversible ones need a reinstall. */
+function undoOne(id: string, force: boolean): UndoResult {
+  const tw = catalog.find((x) => x.id === id);
+  if (tw?.irreversible) {
+    status.set(id, { kind: "notApplied" });
+    return { id, outcomes: [{ kind: "manualReinstall", hint: tw.reinstallHint }] };
+  }
+  if (id === "disable-copilot" && !force) {
+    return { id, outcomes: [{ kind: "changedSince", what: "TurnOffWindowsCopilot" }] };
+  }
+  const was = status.get(id)?.kind;
+  status.set(id, { kind: "notApplied" });
+  return { id, outcomes: [{ kind: was === "notApplied" ? "alreadyOriginal" : "restored" }] };
 }
 
 export const mockApi: Backend = {
@@ -157,14 +177,14 @@ export const mockApi: Backend = {
     listeners.forEach((cb) => cb({ done: ids.length, total: ids.length, current: "" }));
     return report;
   },
-  undoTweaks: async (ids) => {
-    ids.forEach((id) => status.set(id, { kind: "notApplied" }));
-    return { results: ids.map((id) => ({ id, outcomes: [{ kind: "restored" }] })) };
+  undoTweaks: async (ids, force) => {
+    await wait(300);
+    return { results: ids.map((id) => undoOne(id, force)) };
   },
-  undoAll: async () => {
+  undoAll: async (force) => {
+    await wait(300);
     const ids = [...status].filter(([, s]) => s.kind !== "notApplied").map(([id]) => id);
-    ids.forEach((id) => status.set(id, { kind: "notApplied" }));
-    return { results: ids.map((id) => ({ id, outcomes: [{ kind: "restored" }] })) };
+    return { results: ids.map((id) => undoOne(id, force)) };
   },
   ensureRestorePoint: async () => {
     await wait(400);

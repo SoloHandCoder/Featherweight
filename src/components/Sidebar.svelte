@@ -2,6 +2,7 @@
   import { Activity, Gamepad2, House, RotateCcw, Sparkles, Trash2 } from "lucide-svelte";
   import Logo from "./Logo.svelte";
   import type { Page } from "../lib/state.svelte";
+  import { BUSY_HINT } from "../lib/busy";
   import type { Overview } from "../lib/types";
 
   interface Props {
@@ -11,9 +12,11 @@
     /** Opens the Undo all flow. The button is disabled while this is unset. */
     onundoall?: () => void;
     undoDisabled?: boolean;
+    /** A change is running: navigation and Undo all wait for it. */
+    busy?: boolean;
   }
 
-  let { page, overview, onnavigate, onundoall, undoDisabled = false }: Props = $props();
+  let { page, overview, onnavigate, onundoall, undoDisabled = false, busy = false }: Props = $props();
 
   const items: { id: Page; label: string; icon: typeof House }[] = [
     { id: "home", label: "Home", icon: House },
@@ -56,7 +59,9 @@
           type="button"
           class="item"
           aria-current={page === item.id ? "page" : undefined}
-          onclick={() => onnavigate(item.id)}
+          aria-disabled={busy || undefined}
+          title={busy ? BUSY_HINT : undefined}
+          onclick={() => !busy && onnavigate(item.id)}
           {onkeydown}
         >
           <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
@@ -76,7 +81,9 @@
       type="button"
       class="item undo"
       disabled={!onundoall || undoDisabled}
-      onclick={() => onundoall?.()}
+      aria-disabled={busy || undefined}
+      title={busy ? BUSY_HINT : undefined}
+      onclick={() => !busy && onundoall?.()}
     >
       <RotateCcw size={16} strokeWidth={1.75} aria-hidden="true" />
       <span>Undo all</span>
@@ -145,12 +152,17 @@
     flex: none;
   }
 
-  .item:not(:disabled):hover {
+  .item[aria-disabled="true"]:not([aria-current="page"]) {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
+  .item:not(:disabled):not([aria-disabled="true"]):hover {
     background: var(--surface-2);
     color: var(--text);
   }
 
-  .item:not(:disabled):active {
+  .item:not(:disabled):not([aria-disabled="true"]):active {
     background: var(--surface-3);
   }
 

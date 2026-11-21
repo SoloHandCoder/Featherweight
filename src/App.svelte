@@ -4,6 +4,8 @@
   import Sidebar from "./components/Sidebar.svelte";
   import AccountBanner from "./components/AccountBanner.svelte";
   import Home from "./pages/Home.svelte";
+  import Section from "./pages/Section.svelte";
+  import UndoAll from "./components/UndoAll.svelte";
   import { app, navigate, refresh, type Page } from "./lib/state.svelte";
 
   const titles: Record<Page, string> = {
@@ -13,6 +15,8 @@
     gaming: "Gaming",
     cleanup: "Cleanup",
   };
+
+  let undoAll: UndoAll | undefined = $state();
 
   onMount(() => {
     void refresh();
@@ -24,7 +28,9 @@
     page={app.page}
     overview={app.overview}
     onnavigate={navigate}
+    onundoall={() => undoAll?.start()}
     undoDisabled={!app.backendAvailable || !!app.overview?.journalError}
+    busy={app.busy !== null}
   />
 
   <main class="content" aria-labelledby="page-title">
@@ -59,9 +65,13 @@
 
     {#if app.page === "home"}
       <Home />
+    {:else if app.page === "remove" || app.page === "gaming"}
+      {#key app.page}<Section section={app.page} />{/key}
     {/if}
   </main>
 </div>
+
+<UndoAll bind:this={undoAll} />
 
 <style>
   .shell {

@@ -55,6 +55,8 @@ export interface TweakView {
   changes: string[];
   reinstallHint: string | null;
   allUsersOptional: boolean;
+  /** Id of the tweak that can't be on together with this one. */
+  exclusiveWith: string | null;
 }
 
 /** commands::ApplyOutcomeView */

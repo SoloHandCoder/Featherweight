@@ -92,6 +92,8 @@ pub struct TweakView {
     pub reinstall_hint: Option<String>,
     /// Some Appx action can optionally be removed for all users.
     pub all_users_optional: bool,
+    /// The tweak that can't be on at the same time as this one.
+    pub exclusive_with: Option<String>,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -224,6 +226,7 @@ pub fn tweak_views<S: System>(e: &mut Engine<S>) -> Vec<TweakView> {
                 .actions
                 .iter()
                 .any(|a| matches!(a, ActionDef::Appx { all_users: AllUsers::Optional, .. })),
+            exclusive_with: t.exclusive_with.clone(),
         })
         .collect()
 }
@@ -564,8 +567,10 @@ value = { dword = 1 }
             changes: vec!["c".into()],
             reinstall_hint: Some("hint".into()),
             all_users_optional: true,
+            exclusive_with: Some("y".into()),
         };
         let j = serde_json::to_value(&v).unwrap();
+        assert_eq!(j["exclusiveWith"], "y");
         assert_eq!(j["reinstallHint"], "hint");
         assert_eq!(j["perUser"], true);
         assert_eq!(j["allUsersOptional"], true);

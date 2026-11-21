@@ -4,6 +4,7 @@
 
 import { isTauri } from "@tauri-apps/api/core";
 import { backend } from "./backend";
+import { beginBusy, endBusy, type Busy } from "./busy";
 import type { Overview, Preset, TweakView } from "./types";
 
 export type Page = "home" | "remove" | "background" | "gaming" | "cleanup";
@@ -29,7 +30,30 @@ export const app = $state({
   /** False in a plain browser (`npm run dev` without Tauri). */
   backendAvailable: isTauri() || useMock,
   loading: false,
+  /**
+   * The change running right now (apply, undo or cleanup), or null. Only one
+   * runs at a time: start with `startBusy`, finish with `stopBusy` in a
+   * `finally`. While set, the sidebar can't navigate or Undo all.
+   */
+  busy: null as Busy | null,
 });
+
+export type { Busy } from "./busy";
+
+/**
+ * Claims the busy slot. Returns false when another change is running, and
+ * the caller must then do nothing:
+ *
+ *   if (!startBusy({ kind: "apply", label: "Applying Everyday" })) return;
+ *   try { ... } finally { stopBusy(); }
+ */
+export function startBusy(busy: Busy): boolean {
+  return beginBusy(app, busy);
+}
+
+export function stopBusy(): void {
+  endBusy(app);
+}
 
 export const BACKEND_UNAVAILABLE =
   "Can't reach the Featherweight backend. Open the desktop app to see and change this PC's settings.";
@@ -70,6 +94,8 @@ export async function refresh(): Promise<void> {
   }
 }
 
+/** Ignored while a change is running. */
 export function navigate(page: Page): void {
+  if (app.busy) return;
   app.page = page;
 }

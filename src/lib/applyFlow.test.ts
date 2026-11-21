@@ -1,5 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
-import { appName, groupApplyReport, planApply, runApply, type ApplyDeps } from "./applyFlow";
+import {
+  appName,
+  combineGroups,
+  groupApplyReport,
+  groupUndoReport,
+  mergeUndoReport,
+  planApply,
+  resultHeadline,
+  runApply,
+  storeLink,
+  type ApplyDeps,
+  type ResultGroup,
+} from "./applyFlow";
 import type { ApplyReport, RestorePointOutcome, TweakView } from "./types";
 
 function tweak(id: string, irreversible = false, changes: string[] = []): TweakView {
@@ -15,6 +27,7 @@ function tweak(id: string, irreversible = false, changes: string[] = []): TweakV
     changes,
     reinstallHint: null,
     allUsersOptional: false,
+    exclusiveWith: null,
   };
 }
 
@@ -175,5 +188,88 @@ describe("groupApplyReport", () => {
         items: [{ title: "Title recall", detail: "Not available on this version of Windows" }],
       },
     ]);
+  });
+});
+
+describe("groupUndoReport", () => {
+  it("puts each tweak in its worst outcome group", () => {
+    const groups = groupUndoReport(
+      {
+        results: [
+          { id: "ads", outcomes: [{ kind: "restored" }, { kind: "alreadyOriginal" }] },
+          { id: "recall", outcomes: [{ kind: "alreadyOriginal" }] },
+          { id: "x", outcomes: [{ kind: "restored" }, { kind: "changedSince", what: "HKCU\A" }] },
+          { id: "junk", outcomes: [{ kind: "manualReinstall", hint: "9NBLGGH18846" }] },
+          { id: "y", outcomes: [{ kind: "changedSince", what: "B" }, { kind: "failed", message: "Denied" }] },
+        ],
+      },
+      tweaks,
+    );
+    expect(groups).toEqual([
+      { label: "Restored", tone: "ok", items: [{ id: "ads", title: "Title ads" }] },
+      { label: "Already original", tone: "muted", items: [{ id: "recall", title: "Title recall" }] },
+      {
+        label: "Changed since",
+        tone: "bad",
+        items: [{ id: "x", title: "x", detail: "Something else changed HKCU\A since Featherweight set it" }],
+      },
+      {
+        label: "Reinstall manually",
+        tone: "muted",
+        items: [{ id: "junk", title: "Title junk", detail: "Reinstall it from the Microsoft Store (product ID 9NBLGGH18846)", storeId: "9NBLGGH18846" }],
+      },
+      { label: "Failed", tone: "bad", items: [{ id: "y", title: "y", detail: "Denied" }] },
+    ]);
+  });
+
+  it("builds a Store link only from a product id", () => {
+    expect(storeLink("9NBLGGH18846")).toBe("ms-windows-store://pdp/?ProductId=9NBLGGH18846");
+    expect(storeLink("bad id&x=1")).toBeNull();
+  });
+});
+
+describe("mergeUndoReport", () => {
+  it("replaces results by id and keeps order", () => {
+    const merged = mergeUndoReport(
+      {
+        results: [
+          { id: "a", outcomes: [{ kind: "changedSince", what: "X" }] },
+          { id: "b", outcomes: [{ kind: "restored" }] },
+        ],
+      },
+      { results: [{ id: "a", outcomes: [{ kind: "restored" }] }] },
+    );
+    expect(merged.results).toEqual([
+      { id: "a", outcomes: [{ kind: "restored" }] },
+      { id: "b", outcomes: [{ kind: "restored" }] },
+    ]);
+  });
+});
+
+describe("combineGroups and resultHeadline", () => {
+  const g = (label: string, n = 1): ResultGroup => ({
+    label,
+    tone: "ok",
+    items: Array.from({ length: n }, (_, i) => ({ title: `${label} ${i}` })),
+  });
+
+  it("renames clashing Failed groups", () => {
+    expect(combineGroups([g("Applied"), g("Failed")], [g("Failed")]).map((x) => x.label)).toEqual([
+      "Applied",
+      "Failed to apply",
+      "Failed to undo",
+    ]);
+    expect(combineGroups([g("Applied")], [g("Failed")]).map((x) => x.label)).toEqual(["Applied", "Failed"]);
+  });
+
+  it("says what happened", () => {
+    expect(resultHeadline([g("Applied", 2)]).title).toBe("2 changes applied");
+    expect(resultHeadline([g("Restored", 1)]).title).toBe("1 change put back");
+    expect(resultHeadline([g("Applied", 1), g("Restored", 2)])).toEqual({
+      title: "3 changes made",
+      summary: "1 applied, 2 put back.",
+    });
+    expect(resultHeadline([g("Restored"), g("Changed since")]).title).toBe("Some changes didn't go through");
+    expect(resultHeadline([g("Already original")]).title).toBe("Nothing needed changing");
   });
 });

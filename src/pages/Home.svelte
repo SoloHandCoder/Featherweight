@@ -3,13 +3,13 @@
   import StatTile from "../components/StatTile.svelte";
   import PresetCard from "../components/PresetCard.svelte";
   import LevelPill from "../components/LevelPill.svelte";
-  import ConfirmDialog from "../components/ConfirmDialog.svelte";
+  import ApplyDialogs from "../components/ApplyDialogs.svelte";
   import ResultSummary from "../components/ResultSummary.svelte";
   import { backend } from "../lib/backend";
-  import { app, message, refresh } from "../lib/state.svelte";
-  import { appName, groupApplyReport, runApply, type ResultGroup, type RestoreChoice } from "../lib/applyFlow";
+  import { app, message, refresh, startBusy, stopBusy } from "../lib/state.svelte";
+  import { groupApplyReport, runApply, type ResultGroup } from "../lib/applyFlow";
   import { formatBytes } from "../lib/format";
-  import type { Preset, Progress, RestorePointOutcome, TweakView } from "../lib/types";
+  import type { Preset, Progress, TweakView } from "../lib/types";
 
   const PRESETS: { id: Preset; name: string; description: string; icon: typeof Zap }[] = [
     { id: "everyday", name: "Everyday", description: "Faster, quieter PC. Only safe changes.", icon: Zap },
@@ -21,16 +21,14 @@
   let excluded = $state<Record<Preset, string[]>>({ everyday: [], gaming: [] });
   let reviewOpen = $state(false);
 
-  let busy = $state(false);
+  const busy = $derived(app.busy !== null);
+  let nothingChanged = $state(false);
+  let dialogs: ApplyDialogs | undefined = $state();
   let phase = $state<"restore" | "apply" | null>(null);
   let progress = $state<Progress | null>(null);
   let applyError = $state<string | null>(null);
   let applyButton = $state<HTMLButtonElement | null>(null);
 
-  type Question =
-    | { kind: "restore"; outcome: RestorePointOutcome; canEnable: boolean; resolve: (c: RestoreChoice) => void }
-    | { kind: "irreversible"; ids: string[]; resolve: (go: boolean) => void };
-  let question = $state<Question | null>(null);
   let result = $state<{ title: string; summary: string; groups: ResultGroup[] } | null>(null);
 
   const byId = $derived(new Map(app.tweaks.map((t) => [t.id, t])));
@@ -65,6 +63,7 @@
   }
 
   function onPresetKey(e: KeyboardEvent) {
+    if (busy) return;
     if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)) return;
     e.preventDefault();
     const i = PRESETS.findIndex((p) => p.id === preset);
@@ -83,63 +82,7 @@
     return t.status.kind === "partial" ? "Partly applied" : "Not applied";
   }
 
-  function askRestore(outcome: RestorePointOutcome, canEnable: boolean): Promise<RestoreChoice> {
-    return new Promise((resolve) => (question = { kind: "restore", outcome, canEnable, resolve }));
-  }
-
-  function askIrreversible(ids: string[]): Promise<boolean> {
-    return new Promise((resolve) => (question = { kind: "irreversible", ids, resolve }));
-  }
-
-  function answer(value: RestoreChoice) {
-    const q = question;
-    question = null;
-    if (q?.kind === "restore") q.resolve(value);
-    else if (q?.kind === "irreversible") q.resolve(value === true);
-  }
-
-  function restoreCopy(o: RestorePointOutcome, canEnable: boolean) {
-    const tail = "Featherweight keeps its own record, so it can still undo its changes.";
-    switch (o.kind) {
-      case "throttled":
-        return {
-          title: "No new restore point",
-          message: `Windows makes at most one restore point a day, and this PC made one recently. ${tail}`,
-          confirm: "Continue",
-        };
-      case "disabled":
-        // canEnable is false only after a turn-on attempt that didn't stick.
-        return canEnable
-          ? {
-              title: "System Restore is off",
-              message: `Windows can't make a restore point because System Restore is turned off on this PC. ${tail}`,
-              confirm: "Turn on System Restore",
-              secondary: "Continue without one",
-            }
-          : {
-              title: "System Restore is still off",
-              message: `Windows didn't make a restore point after turning System Restore on. ${tail}`,
-              confirm: "Continue without one",
-            };
-      default:
-        return {
-          title: "Couldn't make a restore point",
-          message: `${o.kind === "failed" ? o.message.replace(/\.?$/, ".") : ""} ${tail}`.trim(),
-          confirm: "Continue without one",
-        };
-    }
-  }
-
-  /** Irreversible tweaks with the apps each one removes. */
-  function irreversibleDetail(ids: string[]) {
-    return ids.map((id) => {
-      const t = byId.get(id);
-      const apps = (t?.changes ?? []).map(appName).filter((n): n is string => n !== null);
-      return { id, title: t?.title ?? id, apps };
-    });
-  }
-
-  function summarize(groups: ResultGroup[], total: number) {
+  function summarize(groups: ResultGroup[], total: number, name: string) {
     const count = (label: string) => groups.find((g) => g.label === label)?.items.length ?? 0;
     const applied = count("Applied");
     const failed = count("Failed");
@@ -150,17 +93,21 @@
       };
     }
     if (applied === 0) return { title: "Nothing needed changing", summary: "This PC already had these settings." };
-    return { title: `${plural(applied, "change", "changes")} applied`, summary: `${presetName} is set up on this PC.` };
+    return { title: `${plural(applied, "change", "changes")} applied`, summary: `${name} is set up on this PC.` };
   }
 
   async function apply() {
-    if (busy || !canApply) return;
-    busy = true;
+    if (!canApply) return;
+    // Snapshot so switching cards mid-apply can't change what's shown.
+    const name = presetName;
+    const ids = selected;
+    if (!startBusy({ kind: "apply", label: `Applying ${name}` })) return;
     applyError = null;
+    nothingChanged = false;
     let unlisten: (() => void) | undefined;
     const api = backend.api;
     try {
-      const report = await runApply(selected, [], {
+      const report = await runApply(ids, [], {
         tweaks: app.tweaks,
         ensureRestorePoint: () => {
           phase = "restore";
@@ -169,38 +116,35 @@
         enableSystemRestore: () => api.enableSystemRestore(),
         confirmRestoreIssue: (outcome, { canEnable }) => {
           phase = null;
-          return askRestore(outcome, canEnable);
+          return dialogs!.askRestore(outcome, canEnable);
         },
-        confirmIrreversible: (ids) => {
+        confirmIrreversible: (irr) => {
           phase = null;
-          return askIrreversible(ids);
+          return dialogs!.askIrreversible(irr);
         },
-        applyTweaks: async (ids, allUsers) => {
+        applyTweaks: async (chosen, allUsers) => {
           phase = "apply";
-          progress = { done: 0, total: ids.length, current: "" };
+          progress = { done: 0, total: chosen.length, current: "" };
           unlisten = await api.onApplyProgress((p) => (progress = p));
-          return api.applyTweaks(ids, allUsers);
+          return api.applyTweaks(chosen, allUsers);
         },
       });
       if (report) {
         const groups = groupApplyReport(report, app.tweaks);
-        result = { ...summarize(groups, report.results.length), groups };
+        result = { ...summarize(groups, report.results.length, name), groups };
+      } else {
+        nothingChanged = true;
       }
     } catch (e) {
       applyError = message(e);
     } finally {
       unlisten?.();
-      busy = false;
+      stopBusy();
       phase = null;
       progress = null;
     }
     await refresh();
   }
-
-  const restoreQ = $derived(
-    question?.kind === "restore" ? restoreCopy(question.outcome, question.canEnable) : null,
-  );
-  const irreversibleQ = $derived(question?.kind === "irreversible" ? irreversibleDetail(question.ids) : []);
 </script>
 
 <div class="home">
@@ -232,7 +176,8 @@
           icon={p.icon}
           selected={preset === p.id}
           meta={presetMeta(p.id)}
-          onselect={() => (preset = p.id)}
+          disabled={busy}
+          onselect={() => !busy && (preset = p.id)}
           onkeydown={onPresetKey}
         />
       {/each}
@@ -264,6 +209,8 @@
 
   {#if applyError}
     <p class="error" role="alert">Couldn't apply: {applyError}</p>
+  {:else if nothingChanged}
+    <p class="muted small" role="status">Nothing was changed.</p>
   {/if}
 
   <div class="actions">
@@ -275,7 +222,7 @@
       aria-disabled={busy || undefined}
       onclick={apply}
     >
-      {busy ? `Applying ${presetName}` : applyLabel}
+      {busy ? (app.busy?.label ?? "Working") : applyLabel}
     </button>
     <button
       type="button"
@@ -326,40 +273,7 @@
 
 </div>
 
-<ConfirmDialog
-  open={question?.kind === "restore"}
-  title={restoreQ?.title ?? ""}
-  message={restoreQ?.message}
-  confirmLabel={restoreQ?.confirm ?? "Continue"}
-  secondaryLabel={restoreQ?.secondary}
-  onconfirm={() => answer(question?.kind === "restore" && question.canEnable ? "enable" : true)}
-  onsecondary={() => answer(true)}
-  oncancel={() => answer(false)}
-  returnFocus={applyButton}
-/>
-
-<ConfirmDialog
-  open={question?.kind === "irreversible"}
-  title="These can't be undone with one click"
-  message="Undo can't put these back. You can reinstall most apps from the Microsoft Store."
-  confirmLabel="Remove and clean"
-  cancelLabel="Skip these"
-  cautious
-  onconfirm={() => answer(true)}
-  oncancel={() => answer(false)}
-  returnFocus={applyButton}
->
-  {#each irreversibleQ as t (t.id)}
-    <div class="irr">
-      <h3>{t.title}</h3>
-      {#if t.apps.length > 0}
-        <ul class="apps">
-          {#each t.apps as name (name)}<li>{name}</li>{/each}
-        </ul>
-      {/if}
-    </div>
-  {/each}
-</ConfirmDialog>
+<ApplyDialogs bind:this={dialogs} tweaks={app.tweaks} returnFocus={applyButton} />
 
 <ResultSummary
   open={result !== null}
@@ -563,21 +477,7 @@
     opacity: 0.7;
   }
 
-  .irr h3 {
-    margin: 0 0 var(--space-2);
-    font-size: var(--text-sm);
-    font-weight: var(--weight-semibold);
-  }
-
-  .apps {
-    margin: 0;
-    padding: var(--space-3) var(--space-4);
-    list-style: none;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-1) var(--space-4);
-    background: var(--bg);
-    border-radius: var(--radius-sm);
+  .small {
     font-size: var(--text-sm);
   }
 </style>
