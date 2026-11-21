@@ -1,0 +1,18 @@
+id = "example-tweak"
+title = "Example tweak"
+description = "Fixture used by tests; excluded from the bundled catalog."
+section = "remove"
+level = "safe"
+presets = ["everyday", "gaming"]
+
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Example'
+name = "Enabled"
+value = { dword = 0 }
+
+[[actions]]
+type = "service"
+name = "ExampleSvc"
+start = "disabled"
