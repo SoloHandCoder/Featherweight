@@ -2,9 +2,9 @@
   import { CircleCheck, TriangleAlert } from "lucide-svelte";
   import ConfirmDialog from "../components/ConfirmDialog.svelte";
   import { backend } from "../lib/backend";
-  import { app, message } from "../lib/state.svelte";
+  import { app, message, BACKEND_UNAVAILABLE } from "../lib/state.svelte";
   import { formatBytes } from "../lib/format";
-  import { selectedBytes, selectedTargets } from "../lib/cleanupSelection";
+  import { nextSelection, selectedBytes, selectedTargets } from "../lib/cleanupSelection";
   import type { CleanupReport, CleanupTarget } from "../lib/types";
 
   const HINTS: Record<string, string> = {
@@ -20,18 +20,19 @@
   let confirmOpen = $state(false);
   let cleanButton = $state<HTMLButtonElement | null>(null);
 
-  const chosen = $derived(selectedTargets(targets, selected));
+  const chosen = $derived(selectedTargets(targets, selected).filter((t) => t.bytes > 0));
   const total = $derived(selectedBytes(targets, selected));
   const busy = $derived(scanning || running);
   const canClean = $derived(app.backendAvailable && !busy && chosen.length > 0 && total > 0);
 
-  async function scan() {
+  /** `keepError`: the post-clean rescan must not erase a failed run's message. */
+  async function scan(keepError = false) {
     scanning = true;
+    if (!keepError) error = null;
     try {
       const found = await backend.api.scanCleanup();
+      selected = nextSelection(found, new Set(targets.map((t) => t.id)), selected);
       targets = found;
-      selected = new Set(found.map((t) => t.id));
-      error = null;
     } catch (e) {
       error = message(e);
     } finally {
@@ -51,6 +52,7 @@
       started = true;
       void scan();
     }
+    // Unavailable-state text comes from BACKEND_UNAVAILABLE.
   });
 
   function toggle(id: string) {
@@ -61,6 +63,7 @@
   }
 
   async function run() {
+    if (running || scanning) return;
     confirmOpen = false;
     running = true;
     error = null;
@@ -72,7 +75,7 @@
     } finally {
       running = false;
     }
-    await scan();
+    await scan(true);
   }
 
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -86,7 +89,7 @@
       <TriangleAlert size={16} strokeWidth={1.75} aria-hidden="true" />
       <p>{error}</p>
       {#if app.backendAvailable}
-        <button type="button" class="btn btn-ghost btn-sm" onclick={scan} disabled={busy}>Retry</button>
+        <button type="button" class="btn btn-ghost btn-sm" onclick={() => scan()} disabled={busy}>Retry</button>
       {/if}
     </div>
   {/if}
@@ -113,6 +116,8 @@
         </div>
       {/each}
       <span class="sr-only">Scanning for files to clean</span>
+    {:else if !app.backendAvailable}
+      <p class="empty muted">{BACKEND_UNAVAILABLE}</p>
     {:else if targets.length === 0 && !error}
       <p class="empty muted">Nothing to clean up right now.</p>
     {:else}
@@ -121,7 +126,7 @@
           <input
             type="checkbox"
             checked={selected.has(t.id)}
-            disabled={busy}
+            disabled={busy || t.bytes === 0}
             onchange={() => toggle(t.id)}
           />
           <span class="text">
@@ -317,6 +322,11 @@
 
   input[type="checkbox"]:checked::after {
     opacity: 1;
+  }
+
+  input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
   }
 
   input[type="checkbox"]:disabled {
