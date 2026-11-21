@@ -26,7 +26,7 @@ use winreg::RegKey;
 use winreg::RegValue;
 use winreg::enums::{
     HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_SET_VALUE, KEY_WOW64_64KEY, KEY_WRITE,
-    REG_BINARY, REG_DWORD, REG_QWORD, REG_SZ,
+    REG_BINARY, REG_DWORD, REG_EXPAND_SZ, REG_QWORD, REG_SZ,
 };
 
 use super::{SysError, System};
@@ -205,6 +205,7 @@ fn reg_to_data(v: RegValue) -> Result<RegData, SysError> {
         REG_DWORD => RegData::Dword(u32::from_reg_value(&v).map_err(bad)?),
         REG_QWORD => RegData::Qword(u64::from_reg_value(&v).map_err(bad)?),
         REG_SZ => RegData::String(String::from_reg_value(&v).map_err(bad)?),
+        REG_EXPAND_SZ => RegData::ExpandString(String::from_reg_value(&v).map_err(bad)?),
         REG_BINARY => RegData::Binary(v.bytes.to_vec()),
         other => {
             return Err(SysError::Other(format!("unsupported registry type {other:?}")));
@@ -218,6 +219,7 @@ fn data_to_reg(d: &RegData) -> RegValue<'_> {
         RegData::Dword(n) => n.to_reg_value(),
         RegData::Qword(n) => n.to_reg_value(),
         RegData::String(s) => s.to_reg_value(),
+        RegData::ExpandString(s) => RegValue { vtype: REG_EXPAND_SZ, ..s.to_reg_value() },
         RegData::Binary(b) => RegValue { bytes: b.clone().into(), vtype: REG_BINARY },
     }
 }

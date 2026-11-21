@@ -88,9 +88,12 @@ pub fn list<S: System>(sys: &S, folders: &StartupFolders) -> Result<Vec<StartupE
     for (loc, hive, path) in run_keys {
         let (ahive, apath) = loc.approved();
         for (name, data) in sys.reg_values(hive, path)? {
-            let RegData::String(command) = data else { continue };
-            let enabled = !is_disabled(sys.reg_get(ahive, &apath, &name)?);
-            out.push(entry(loc, name, command, enabled));
+            let (RegData::String(command) | RegData::ExpandString(command)) = data else {
+                continue;
+            };
+            // One unreadable flag must not hide every other entry.
+            let Ok(flag) = sys.reg_get(ahive, &apath, &name) else { continue };
+            out.push(entry(loc, name, command, !is_disabled(flag)));
         }
     }
     let dirs = [
@@ -118,8 +121,8 @@ pub fn list<S: System>(sys: &S, folders: &StartupFolders) -> Result<Vec<StartupE
         }
         files.sort();
         for (name, path) in files {
-            let enabled = !is_disabled(sys.reg_get(ahive, &apath, &name)?);
-            out.push(entry(loc, name, path.to_string_lossy().into_owned(), enabled));
+            let Ok(flag) = sys.reg_get(ahive, &apath, &name) else { continue };
+            out.push(entry(loc, name, path.to_string_lossy().into_owned(), !is_disabled(flag)));
         }
     }
     Ok(out)
@@ -217,6 +220,24 @@ mod tests {
         assert_eq!(sp.command, f.user.join("Spotify.lnk").to_string_lossy());
         assert!(sp.per_user);
         assert_eq!(find(&v, "common_folder:Tool.lnk").location, StartupLocation::CommonFolder);
+    }
+
+    #[test]
+    fn expand_sz_is_listed_and_a_bad_entry_does_not_abort() {
+        let d = tempfile::tempdir().unwrap();
+        let f = folders(&d);
+        std::fs::write(f.user.join("Bad.lnk"), b"x").unwrap();
+        std::fs::write(f.user.join("Good.lnk"), b"x").unwrap();
+        let mut sys = FakeSystem::new()
+            .with_reg(Hive::Hkcu, RUN, "Exp", RegData::ExpandString(r"%APPDATA%\x.exe".into()))
+            .with_reg(Hive::Hkcu, RUN, "Broken", RegData::String("b".into()))
+            .with_reg(Hive::Hkcu, RUN, "Fine", RegData::String("f".into()));
+        sys.fail_reads = vec!["Broken".into(), "Bad.lnk".into()];
+        let v = list(&sys, &f).unwrap();
+        assert_eq!(find(&v, "hkcu_run:Exp").command, r"%APPDATA%\x.exe");
+        assert!(v.iter().any(|e| e.id == "hkcu_run:Fine"));
+        assert!(v.iter().any(|e| e.id == "user_folder:Good.lnk"));
+        assert!(!v.iter().any(|e| e.id == "hkcu_run:Broken" || e.id == "user_folder:Bad.lnk"));
     }
 
     #[test]

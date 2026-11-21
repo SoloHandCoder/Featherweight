@@ -21,6 +21,8 @@ pub struct FakeSystem {
     active_scheme: String,
     /// Makes the next MUTATING call fail, then clears itself.
     pub fail_next: Option<SysError>,
+    /// `reg_get` fails for any value whose name (case-insensitive) is listed.
+    pub fail_reads: Vec<String>,
     /// Number of mutating calls that succeed before `fail_next` fires.
     pub fail_skip: usize,
     /// Scripted PowerShell output keyed by exact script text.
@@ -55,6 +57,7 @@ impl FakeSystem {
             schemes: HashSet::from([DEFAULT_SCHEME.to_string()]),
             active_scheme: DEFAULT_SCHEME.to_string(),
             fail_next: None,
+            fail_reads: Vec::new(),
             fail_skip: 0,
             ps_responses: HashMap::new(),
             removed_appx: Vec::new(),
@@ -125,6 +128,9 @@ impl FakeSystem {
 
 impl System for FakeSystem {
     fn reg_get(&self, hive: Hive, path: &str, name: &str) -> Result<Option<RegData>, SysError> {
+        if self.fail_reads.iter().any(|n| n.eq_ignore_ascii_case(name)) {
+            return Err(SysError::Other(format!("simulated read failure: {name}")));
+        }
         Ok(self.regs.get(&rk(hive, path, name)).cloned())
     }
 
