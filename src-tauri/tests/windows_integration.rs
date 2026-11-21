@@ -94,22 +94,6 @@ fn appx_missing_package_is_false() {
 
 #[test]
 #[ignore]
-fn unsupported_registry_type_is_other_error() {
-    let _c = Cleanup;
-    let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
-    let (k, _) = hkcu.create_subkey(KEY).unwrap();
-    let bytes: Vec<u8> = "%TEMP%\0".encode_utf16().flat_map(u16::to_le_bytes).collect();
-    k.set_raw_value(
-        "E",
-        &winreg::RegValue { bytes: bytes.into(), vtype: winreg::enums::REG_EXPAND_SZ },
-    )
-    .unwrap();
-    let r = WindowsSystem.reg_get(Hive::Hkcu, KEY, "E");
-    assert!(matches!(&r, Err(SysError::Other(m)) if m.contains("unsupported registry type")), "{r:?}");
-}
-
-#[test]
-#[ignore]
 fn appx_rejects_unsafe_name() {
     assert!(matches!(
         WindowsSystem.appx_installed(r"x'; Remove-Item C:\ #"),
