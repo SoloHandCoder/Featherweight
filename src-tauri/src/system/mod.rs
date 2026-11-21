@@ -36,7 +36,9 @@ pub trait System {
     /// `None` = task absent.
     fn task_enabled(&self, path: &str) -> Result<Option<bool>, SysError>;
     fn set_task_enabled(&mut self, path: &str, enabled: bool) -> Result<(), SysError>;
-    /// `None` = unknown package name on this build.
+    /// `Some(true)` = installed for the current user. Real implementations
+    /// return `Some(false)` for packages absent on this PC; `None` (unknown
+    /// package) is only produced by fakes.
     fn appx_installed(&self, package: &str) -> Result<Option<bool>, SysError>;
     fn remove_appx(&mut self, package: &str, all_users: bool) -> Result<(), SysError>;
     /// Lowercase GUID.

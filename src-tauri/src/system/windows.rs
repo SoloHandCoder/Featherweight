@@ -2,12 +2,14 @@
 //! power schemes and PowerShell on this machine.
 
 use std::os::windows::process::CommandExt;
+use std::io::Read;
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 use std::sync::OnceLock;
 
 use ::windows::Win32::Foundation::{
-    CloseHandle, ERROR_ACCESS_DENIED, ERROR_SERVICE_DOES_NOT_EXIST, ERROR_SERVICE_NOT_ACTIVE,
-    HANDLE,
+    CloseHandle, ERROR_ACCESS_DENIED, ERROR_SERVICE_CANNOT_ACCEPT_CTRL,
+    ERROR_SERVICE_DOES_NOT_EXIST, ERROR_SERVICE_NOT_ACTIVE, HANDLE,
 };
 use ::windows::Win32::Security::{
     GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,
@@ -98,33 +100,87 @@ fn system32() -> std::path::PathBuf {
     std::path::Path::new(&root).join("System32")
 }
 
-/// Runs a console tool without a window; arguments are passed separately.
-fn run_tool(exe: &std::path::Path, args: &[&str]) -> Result<Output, SysError> {
-    let out = Command::new(exe)
-        .args(args)
-        .creation_flags(CREATE_NO_WINDOW)
-        .stdin(Stdio::null())
-        .output()
-        .map_err(|e| map_io(e, &exe.display().to_string()))?;
-    Ok(Output {
-        ok: out.status.success(),
-        stdout: decode(&out.stdout),
-        stderr: decode(&out.stderr),
+const TOOL_TIMEOUT: Duration = Duration::from_secs(120);
+
+fn drain<R: Read + Send + 'static>(mut r: R) -> std::thread::JoinHandle<Vec<u8>> {
+    std::thread::spawn(move || {
+        let mut v = Vec::new();
+        let _ = r.read_to_end(&mut v);
+        v
     })
 }
 
-/// Console output may be UTF-16 (with BOM) or an 8-bit code page.
+/// Runs a console tool without a window; arguments are passed separately.
+/// Killed after `TOOL_TIMEOUT`.
+fn run_tool(exe: &std::path::Path, args: &[&str]) -> Result<Output, SysError> {
+    let name = exe.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let mut child = Command::new(exe)
+        .args(args)
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| map_io(e, &exe.display().to_string()))?;
+    let out = drain(child.stdout.take().expect("piped"));
+    let err = drain(child.stderr.take().expect("piped"));
+    let deadline = Instant::now() + TOOL_TIMEOUT;
+    let status = loop {
+        match child.try_wait().map_err(|e| map_io(e, &name))? {
+            Some(st) => break st,
+            None if Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(SysError::Other(format!(
+                    "timed out after {}s running {name}",
+                    TOOL_TIMEOUT.as_secs()
+                )));
+            }
+            None => std::thread::sleep(Duration::from_millis(20)),
+        }
+    };
+    Ok(Output {
+        ok: status.success(),
+        stdout: decode(&out.join().unwrap_or_default()),
+        stderr: decode(&err.join().unwrap_or_default()),
+    })
+}
+
+/// Console output may be UTF-16 (with or without BOM) or an 8-bit code page.
 fn decode(bytes: &[u8]) -> String {
+    let utf16 = |b: &[u8]| {
+        let u: Vec<u16> = b.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+        String::from_utf16_lossy(&u)
+    };
     if bytes.len() >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE {
-        let u: Vec<u16> =
-            bytes[2..].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
-        return String::from_utf16_lossy(&u);
+        return utf16(&bytes[2..]);
+    }
+    // BOM-less UTF-16LE of mostly-ASCII text is full of NUL bytes.
+    let head = &bytes[..bytes.len().min(64)];
+    if head.len() >= 4 && head.iter().filter(|&&b| b == 0).count() * 4 >= head.len() {
+        return utf16(bytes);
     }
     String::from_utf8_lossy(bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes)).into_owned()
 }
 
+/// Message text of a PowerShell CLIXML error stream, or the text unchanged.
+fn strip_clixml(s: &str) -> String {
+    if !s.trim_start().starts_with("#< CLIXML") {
+        return s.to_string();
+    }
+    static RE: OnceLock<Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| Regex::new(r#"<S S="Error">(.*?)</S>"#).unwrap());
+    re.captures_iter(s)
+        .map(|c| c[1].replace("_x000D_", "").replace("_x000A_", " "))
+        .collect::<Vec<_>>()
+        .join("")
+        .trim()
+        .to_string()
+}
+
 fn text_of(o: &Output) -> String {
-    let s = if o.stderr.trim().is_empty() { &o.stdout } else { &o.stderr };
+    let err = strip_clixml(&o.stderr);
+    let s = if err.trim().is_empty() { &o.stdout } else { &err };
     s.trim().to_string()
 }
 
@@ -151,10 +207,27 @@ fn run_ps(script: &str) -> Result<Output, SysError> {
     let full = format!(
         "$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.Encoding]::UTF8;{script}"
     );
+    let utf16le: Vec<u8> = full.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    let encoded = base64(&utf16le);
     run_tool(
         &exe,
-        &["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", &full],
+        &["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", &encoded],
     )
+}
+
+fn base64(data: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
+    for c in data.chunks(3) {
+        let n = (c[0] as u32) << 16
+            | (*c.get(1).unwrap_or(&0) as u32) << 8
+            | *c.get(2).unwrap_or(&0) as u32;
+        out.push(T[(n >> 18) as usize & 63] as char);
+        out.push(T[(n >> 12) as usize & 63] as char);
+        out.push(if c.len() > 1 { T[(n >> 6) as usize & 63] as char } else { '=' });
+        out.push(if c.len() > 2 { T[n as usize & 63] as char } else { '=' });
+    }
+    out
 }
 
 fn package_name(p: &str) -> Result<&str, SysError> {
@@ -283,16 +356,22 @@ fn task_exists(path: &str) -> Result<bool, SysError> {
     }
 }
 
-/// Task-level `<Settings><Enabled>`; absent means enabled. (Trigger elements
-/// also carry `<Enabled>`, so only the `<Settings>` block is searched.)
-fn enabled_from_xml(xml: &str) -> bool {
-    let Some(start) = xml.find("<Settings>") else { return true };
+/// Task-level `<Settings><Enabled>`; absent inside `<Settings>` means
+/// enabled. Fails closed: output that isn't a task definition with a
+/// `<Settings>` element is an error. (Trigger elements also carry
+/// `<Enabled>`, so only the `<Settings>` block is searched.)
+fn enabled_from_xml(xml: &str) -> Result<bool, SysError> {
+    let bad = |what: &str| SysError::Other(format!("unexpected task definition: {what}"));
+    if !xml.contains("<Task") {
+        return Err(bad("no <Task> element"));
+    }
+    let start = xml.find("<Settings>").ok_or_else(|| bad("no <Settings> element"))?;
     let rest = &xml[start..];
-    let block = &rest[..rest.find("</Settings>").unwrap_or(rest.len())];
-    match block.find("<Enabled>") {
+    let block = &rest[..rest.find("</Settings>").ok_or_else(|| bad("unterminated <Settings>"))?];
+    Ok(match block.find("<Enabled>") {
         Some(i) => !block[i + "<Enabled>".len()..].trim_start().to_lowercase().starts_with("false"),
         None => true,
-    }
+    })
 }
 
 // ------------------------------------------------------------------ System
@@ -375,7 +454,11 @@ impl System for WindowsSystem {
 
     fn set_service_start(&mut self, name: &str, start: StartType) -> Result<(), SysError> {
         let scm = open_scm()?;
-        let access = SERVICE_CHANGE_CONFIG | SERVICE_STOP;
+        let access = if start == StartType::Disabled {
+            SERVICE_CHANGE_CONFIG | SERVICE_STOP
+        } else {
+            SERVICE_CHANGE_CONFIG
+        };
         let Some(svc) = open_service(&scm, name, access)? else {
             return Err(SysError::NotFound(format!("service {name}")));
         };
@@ -405,7 +488,9 @@ impl System for WindowsSystem {
             let mut status = SERVICE_STATUS::default();
             // SAFETY: valid handle and out-pointer.
             if let Err(e) = unsafe { ControlService(svc.0, SERVICE_CONTROL_STOP, &mut status) } {
-                if win32_code(&e) != ERROR_SERVICE_NOT_ACTIVE.0 {
+                // Not running / not stoppable: the config change already took.
+                let c = win32_code(&e);
+                if c != ERROR_SERVICE_NOT_ACTIVE.0 && c != ERROR_SERVICE_CANNOT_ACCEPT_CTRL.0 {
                     return Err(map_win(e, &format!("stop {name}")));
                 }
             }
@@ -422,7 +507,7 @@ impl System for WindowsSystem {
         if !o.ok {
             return Err(tool_err("schtasks /Query", &o, true));
         }
-        Ok(Some(enabled_from_xml(&o.stdout)))
+        enabled_from_xml(&o.stdout).map(Some)
     }
 
     fn set_task_enabled(&mut self, path: &str, enabled: bool) -> Result<(), SysError> {
@@ -438,22 +523,20 @@ impl System for WindowsSystem {
         Err(tool_err("schtasks /Change", &o, true))
     }
 
+    /// `Some(true)` iff installed for the current user, else `Some(false)`.
     fn appx_installed(&self, package: &str) -> Result<Option<bool>, SysError> {
         let p = package_name(package)?;
         let script = format!(
             "$ErrorActionPreference='Stop';\
-             $i=@(Get-AppxPackage -AllUsers -Name '{p}').Count;\
-             $v=@(Get-AppxProvisionedPackage -Online | Where-Object {{ $_.DisplayName -eq '{p}' }}).Count;\
-             if ($i -gt 0) {{ 'installed' }} elseif ($v -gt 0) {{ 'provisioned' }} else {{ 'unknown' }}"
+             if (@(Get-AppxPackage -Name '{p}').Count -gt 0) {{ 'yes' }} else {{ 'no' }}"
         );
         let o = run_ps(&script)?;
         if !o.ok {
-            return Err(tool_err("Get-AppxPackage", &o, true));
+            return Err(tool_err("Get-AppxPackage", &o, false));
         }
         match o.stdout.trim() {
-            "installed" => Ok(Some(true)),
-            "provisioned" => Ok(Some(false)),
-            "unknown" => Ok(None),
+            "yes" => Ok(Some(true)),
+            "no" => Ok(Some(false)),
             other => Err(SysError::Other(format!("unexpected appx query output: {other:?}"))),
         }
     }
@@ -528,11 +611,46 @@ mod tests {
     #[test]
     fn xml_enabled_reads_settings_block_only() {
         let on = "<Task><Triggers><TimeTrigger><Enabled>false</Enabled></TimeTrigger></Triggers><Settings><Enabled>true</Enabled></Settings></Task>";
-        assert!(enabled_from_xml(on));
+        assert!(enabled_from_xml(on).unwrap());
         let off = "<Task><Triggers><X><Enabled>true</Enabled></X></Triggers><Settings><AllowStartOnDemand>true</AllowStartOnDemand><Enabled>false</Enabled></Settings></Task>";
-        assert!(!enabled_from_xml(off));
-        assert!(enabled_from_xml("<Task><Settings><Hidden>false</Hidden></Settings></Task>"));
-        assert!(enabled_from_xml("<Task></Task>"));
+        assert!(!enabled_from_xml(off).unwrap());
+        assert!(enabled_from_xml("<Task><Settings><Hidden>false</Hidden></Settings></Task>").unwrap());
+    }
+
+    #[test]
+    fn xml_enabled_fails_closed() {
+        assert!(matches!(enabled_from_xml(""), Err(SysError::Other(_))));
+        assert!(matches!(enabled_from_xml("ERROR: garbage"), Err(SysError::Other(_))));
+        assert!(matches!(enabled_from_xml("<Task></Task>"), Err(SysError::Other(_))));
+        assert!(matches!(
+            enabled_from_xml("<Task><Settings><Enabled>false</Enabled>"),
+            Err(SysError::Other(_))
+        ));
+    }
+
+    #[test]
+    fn decode_handles_utf16_with_and_without_bom() {
+        let u: Vec<u8> = "<Task>x</Task>".encode_utf16().flat_map(u16::to_le_bytes).collect();
+        assert_eq!(decode(&u), "<Task>x</Task>");
+        let mut bom = vec![0xFF, 0xFE];
+        bom.extend(&u);
+        assert_eq!(decode(&bom), "<Task>x</Task>");
+        assert_eq!(decode(b"plain text"), "plain text");
+    }
+
+    #[test]
+    fn clixml_is_reduced_to_message() {
+        let s = "#< CLIXML\r\n<Objs><S S=\"Error\">boom_x000D__x000A_</S><S S=\"Error\">more</S></Objs>";
+        assert_eq!(strip_clixml(s), "boom more");
+        assert_eq!(strip_clixml("plain"), "plain");
+    }
+
+    #[test]
+    fn base64_matches_known_vectors() {
+        assert_eq!(base64(b""), "");
+        assert_eq!(base64(b"f"), "Zg==");
+        assert_eq!(base64(b"fo"), "Zm8=");
+        assert_eq!(base64(b"foo"), "Zm9v");
     }
 
     #[test]

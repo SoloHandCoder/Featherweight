@@ -126,11 +126,12 @@ mod win {
     }
 
     /// pid of explorer.exe running in the active console session.
-    fn console_explorer_pid() -> Option<u32> {
+    /// `Err` when the process list can't be taken, `Ok(None)` when no explorer runs there.
+    fn console_explorer_pid() -> Result<Option<u32>, ()> {
         // SAFETY: plain Win32 calls with valid arguments.
         unsafe {
             let console = WTSGetActiveConsoleSessionId();
-            let snap = Owned(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).ok()?);
+            let snap = Owned(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0).map_err(|_| ())?);
             let mut e = PROCESSENTRY32W {
                 dwSize: size_of::<PROCESSENTRY32W>() as u32,
                 ..Default::default()
@@ -144,20 +145,24 @@ mod win {
                     if ProcessIdToSessionId(e.th32ProcessID, &mut session).is_ok()
                         && session == console
                     {
-                        return Some(e.th32ProcessID);
+                        return Ok(Some(e.th32ProcessID));
                     }
                 }
                 more = Process32NextW(snap.0, &mut e).is_ok();
             }
-            None
+            Ok(None)
         }
     }
 
     /// `None` only when there is no explorer.exe in the console session.
-    /// `Some(false)` when explorer exists but its owner can't be read or
-    /// differs from ours.
+    /// `Some(false)` when the process list can't be read, or explorer exists
+    /// but its owner can't be read or differs from ours.
     pub fn same_user_as_explorer() -> Option<bool> {
-        let pid = console_explorer_pid()?;
+        let pid = match console_explorer_pid() {
+            Err(()) => return Some(false),
+            Ok(None) => return None,
+            Ok(Some(p)) => p,
+        };
         // SAFETY: valid pid; handle is closed by `Owned`.
         let Ok(h) = (unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }) else {
             return Some(false);

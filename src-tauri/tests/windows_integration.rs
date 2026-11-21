@@ -63,22 +63,49 @@ fn missing_task_is_none() {
 
 #[test]
 #[ignore]
-fn reads_task_state_without_error() {
-    // Read-only; the task may be absent or unreadable without elevation.
-    match WindowsSystem.task_enabled(r"\Microsoft\Windows\Defrag\ScheduledDefrag") {
-        Ok(_) | Err(SysError::AccessDenied(_)) => {}
-        Err(e) => panic!("{e}"),
+fn reads_task_state() {
+    let r = WindowsSystem.task_enabled(r"\Microsoft\Windows\Defrag\ScheduledDefrag");
+    if elevated() {
+        assert!(matches!(r, Ok(Some(_))), "{r:?}");
+    } else {
+        match r {
+            Ok(_) | Err(SysError::AccessDenied(_)) => {}
+            Err(e) => panic!("{e}"),
+        }
     }
+}
+
+/// `net session` succeeds only for an elevated process.
+fn elevated() -> bool {
+    std::process::Command::new("net")
+        .arg("session")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
 }
 
 #[test]
 #[ignore]
-fn appx_unknown_package_is_none() {
-    match WindowsSystem.appx_installed("Fw.NoSuchPackage") {
-        Ok(v) => assert_eq!(v, None),
-        Err(SysError::AccessDenied(_)) => {} // -AllUsers may need elevation
-        Err(e) => panic!("{e}"),
-    }
+fn appx_missing_package_is_false() {
+    assert_eq!(WindowsSystem.appx_installed("Fw.NoSuchPackage").unwrap(), Some(false));
+}
+
+#[test]
+#[ignore]
+fn unsupported_registry_type_is_other_error() {
+    let _c = Cleanup;
+    let hkcu = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER);
+    let (k, _) = hkcu.create_subkey(KEY).unwrap();
+    let bytes: Vec<u8> = "%TEMP%\0".encode_utf16().flat_map(u16::to_le_bytes).collect();
+    k.set_raw_value(
+        "E",
+        &winreg::RegValue { bytes: bytes.into(), vtype: winreg::enums::REG_EXPAND_SZ },
+    )
+    .unwrap();
+    let r = WindowsSystem.reg_get(Hive::Hkcu, KEY, "E");
+    assert!(matches!(&r, Err(SysError::Other(m)) if m.contains("unsupported registry type")), "{r:?}");
 }
 
 #[test]
