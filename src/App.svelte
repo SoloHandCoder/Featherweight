@@ -4,6 +4,7 @@
   import Sidebar from "./components/Sidebar.svelte";
   import AccountBanner from "./components/AccountBanner.svelte";
   import Home from "./pages/Home.svelte";
+  import Cleanup from "./pages/Cleanup.svelte";
   import { app, navigate, refresh, type Page } from "./lib/state.svelte";
 
   const titles: Record<Page, string> = {
@@ -59,6 +60,8 @@
 
     {#if app.page === "home"}
       <Home />
+    {:else if app.page === "cleanup"}
+      <Cleanup />
     {/if}
   </main>
 </div>
