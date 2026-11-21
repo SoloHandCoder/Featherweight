@@ -4,6 +4,7 @@
 //! TypeScript mirror of every view lives in `src/lib/types.ts`.
 
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use serde::Serialize;
@@ -12,7 +13,7 @@ use tauri::{AppHandle, Emitter, State};
 use crate::actions;
 use crate::catalog::{ActionDef, AllUsers};
 use crate::cleanup::{self, CleanupReport, CleanupTarget};
-use crate::engine::{ApplyOutcome, Engine, NaReason, Progress, TweakStatus, UndoOutcome};
+use crate::engine::{ApplyOutcome, Engine, Env, NaReason, Progress, TweakStatus, UndoOutcome};
 use crate::env;
 use crate::model::{Level, Preset, Section};
 use crate::restore::{self, RestoreGuard, RestorePointOutcome};
@@ -280,6 +281,41 @@ fn journal_ok(state: &AppState) -> Result<(), String> {
     }
 }
 
+/// Set once `ensure_restore_point` has been tried this session, whatever the
+/// outcome, so the user can still proceed after being told it failed.
+static RESTORE_ATTEMPTED: AtomicBool = AtomicBool::new(false);
+
+/// Refuses journaled changes until a restore point was at least attempted.
+fn require_restore_attempted(flag: &AtomicBool) -> Result<(), String> {
+    if flag.load(Ordering::SeqCst) {
+        Ok(())
+    } else {
+        Err("Make a restore point first".to_string())
+    }
+}
+
+/// Builds the Home overview; a stat that could not be read counts as 0.
+fn build_overview(
+    env: &Env,
+    startup_enabled: Result<u32, String>,
+    services_running: Result<u32, String>,
+    junk_bytes: Result<u64, String>,
+    journal_error: Option<String>,
+) -> Overview {
+    Overview {
+        build: env.build,
+        is_laptop: env.is_laptop,
+        per_user_allowed: env.per_user_allowed,
+        account_message: crate::env::account_message(env),
+        stats: Stats {
+            startup_enabled: startup_enabled.unwrap_or(0),
+            services_running: services_running.unwrap_or(0),
+            junk_bytes: junk_bytes.unwrap_or(0),
+        },
+        journal_error,
+    }
+}
+
 fn startup_folders() -> Result<StartupFolders, String> {
     match (cleanup::known::startup(), cleanup::known::common_startup()) {
         (Some(user), Some(common)) => Ok(StartupFolders { user, common }),
@@ -300,25 +336,19 @@ pub async fn get_overview(state: State<'_, AppState>) -> Result<Overview, String
     let engine = state.engine.clone();
     let journal_error = state.journal_error.clone();
     blocking(move || {
-        let folders = startup_folders()?;
+        let folders = startup_folders();
         // Scanning can be slow; do it before taking the engine lock.
-        let junk_bytes = scanned_targets().iter().map(|t| t.bytes).sum();
+        let junk_bytes: u64 = scanned_targets().iter().map(|t| t.bytes).sum();
         let e = lock(&engine)?;
-        let startup_enabled = startup::list(&e.sys, &folders)
-            .map_err(|err| err.to_string())?
-            .iter()
-            .filter(|s| s.enabled)
-            .count() as u32;
-        let stats =
-            Stats::collect(&e.sys, startup_enabled, junk_bytes).map_err(|err| err.to_string())?;
-        Ok(Overview {
-            build: e.env.build,
-            is_laptop: e.env.is_laptop,
-            per_user_allowed: e.env.per_user_allowed,
-            account_message: env::account_message(&e.env),
-            stats,
-            journal_error,
-        })
+        let startup_enabled = folders.and_then(|f| {
+            startup::list(&e.sys, &f)
+                .map(|l| l.iter().filter(|s| s.enabled).count() as u32)
+                .map_err(|err| err.to_string())
+        });
+        let services = Stats::collect(&e.sys, 0, 0)
+            .map(|s| s.services_running)
+            .map_err(|err| err.to_string());
+        Ok(build_overview(&e.env, startup_enabled, services, Ok(junk_bytes), journal_error))
     })
     .await
 }
@@ -346,6 +376,7 @@ pub async fn apply_tweaks(
     all_users: Vec<String>,
 ) -> Result<ApplyReport, String> {
     journal_ok(&state)?;
+    require_restore_attempted(&RESTORE_ATTEMPTED)?;
     let engine = state.engine.clone();
     blocking(move || {
         let mut e = lock(&engine)?;
@@ -386,7 +417,10 @@ pub async fn ensure_restore_point(state: State<'_, AppState>) -> Result<RestoreP
     blocking(move || {
         let mut e = lock(&engine)?;
         let mut g = lock(&guard)?;
-        Ok(restore::ensure(&mut g, &mut e.sys).into())
+        let outcome = restore::ensure(&mut g, &mut e.sys);
+        // Any outcome counts: the user has been told and may still proceed.
+        RESTORE_ATTEMPTED.store(true, Ordering::SeqCst);
+        Ok(outcome.into())
     })
     .await
 }
@@ -414,6 +448,7 @@ pub async fn set_startup_enabled(
     enabled: bool,
 ) -> Result<(), String> {
     journal_ok(&state)?;
+    require_restore_attempted(&RESTORE_ATTEMPTED)?;
     let engine = state.engine.clone();
     blocking(move || {
         let folders = startup_folders()?;
@@ -608,6 +643,36 @@ value = { dword = 1 }
         assert_eq!(outs.len(), 2);
         assert_eq!(outs[0], serde_json::json!({ "kind": "manualReinstall", "hint": "9NBLGGH18846" }));
         assert_eq!(outs[1], serde_json::json!({ "kind": "restored" }));
+    }
+
+    #[test]
+    fn restore_gate_refuses_until_attempted() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let flag = AtomicBool::new(false);
+        let err = require_restore_attempted(&flag).unwrap_err();
+        assert!(err.contains("Make a restore point first"));
+        flag.store(true, Ordering::SeqCst);
+        assert!(require_restore_attempted(&flag).is_ok());
+    }
+
+    #[test]
+    fn overview_survives_failed_stats() {
+        let env = Env { build: 22631, is_laptop: true, per_user_allowed: false };
+        let o = build_overview(
+            &env,
+            Err("no startup folders".into()),
+            Err("scm".into()),
+            Err("scan".into()),
+            Some("journal bad".into()),
+        );
+        assert_eq!(o.build, 22631);
+        assert!(o.is_laptop);
+        assert!(!o.per_user_allowed);
+        assert!(o.account_message.is_some());
+        assert_eq!(o.stats, Stats { startup_enabled: 0, services_running: 0, junk_bytes: 0 });
+        assert_eq!(o.journal_error.as_deref(), Some("journal bad"));
+        let o = build_overview(&env, Ok(3), Ok(50), Ok(99), None);
+        assert_eq!(o.stats, Stats { startup_enabled: 3, services_running: 50, junk_bytes: 99 });
     }
 
     #[test]
