@@ -46,6 +46,9 @@ pub enum UndoOutcome {
     ChangedSince(String),
     /// A removed app: `app` is its package name, `hint` its Store product id.
     ManualReinstall { app: String, hint: Option<String> },
+    /// Journaled for another Windows account (its HKCU or apps): left alone,
+    /// it can only be undone by running Featherweight as that account.
+    OtherAccount(String),
     Failed(String),
 }
 
@@ -115,6 +118,8 @@ struct Done {
     key: ValueKey,
     index: usize,
     observed_before: Snapshot,
+    /// Account the journal entry was tagged with.
+    sid: Option<String>,
     /// The journal entry for this key before this call (if any), so rollback
     /// puts the journal back exactly as it was.
     prev_entry: Option<JournalEntry>,
@@ -123,6 +128,24 @@ struct Done {
 impl<S: System> Engine<S> {
     pub fn new(sys: S, catalog: Catalog, journal: Journal, env: Env) -> Self {
         Engine { sys, catalog, journal, env }
+    }
+
+    /// The account a journal key belongs to: the current user's SID for
+    /// HKCU values, Appx packages and per-user scripts, `None` otherwise.
+    fn key_sid(&self, key: &ValueKey, per_user_tweak: bool) -> Option<String> {
+        let per_user = match key {
+            ValueKey::Registry { hive: Hive::Hkcu, .. } | ValueKey::Appx { .. } => true,
+            ValueKey::Script { .. } => per_user_tweak,
+            _ => false,
+        };
+        if per_user { self.sys.current_user_sid() } else { None }
+    }
+
+    /// The entry was recorded for a different account than the current one.
+    fn belongs_to_other_account(&self, e: &JournalEntry) -> bool {
+        e.user_sid
+            .as_deref()
+            .is_some_and(|sid| self.sys.current_user_sid().as_deref() != Some(sid))
     }
 
     fn applicability(&self, t: &TweakDef) -> Option<NaReason> {
@@ -229,7 +252,8 @@ impl<S: System> Engine<S> {
                 continue;
             }
             let key = a.key(&t.id, index);
-            let prev_entry = self.journal.all().into_iter().find(|e| e.key == key);
+            let sid = self.key_sid(&key, t.is_per_user());
+            let prev_entry = self.journal.find(&key, sid.as_deref());
             let entry = JournalEntry {
                 key: key.clone(),
                 tweak_id: t.id.clone(),
@@ -237,6 +261,7 @@ impl<S: System> Engine<S> {
                 before: before.clone(),
                 after,
                 applied_at: now_rfc3339(),
+                user_sid: sid.clone(),
             };
             if let Err(e) = self.journal.record(entry) {
                 let msg = format!("could not write the undo journal: {e}");
@@ -244,7 +269,7 @@ impl<S: System> Engine<S> {
             }
             // The journal now holds this key, so it joins the rollback set even if
             // apply fails part-way (restoring an unchanged value is harmless).
-            done.push(Done { key, index, observed_before: before, prev_entry });
+            done.push(Done { key, index, observed_before: before, sid, prev_entry });
             if let Err(e) = actions::apply(a, &mut self.sys, all_users) {
                 return ApplyOutcome::Failed(self.rollback(t, done, e.to_string()));
             }
@@ -263,7 +288,7 @@ impl<S: System> Engine<S> {
                 Ok(RestoreResult::Done) => {
                     let r = match d.prev_entry {
                         Some(prev) => self.journal.record(prev),
-                        None => self.journal.remove(&d.key),
+                        None => self.journal.remove(&d.key, d.sid.as_deref()),
                     };
                     if let Err(e) = r {
                         problems.push(format!("journal update failed: {e}"));
@@ -326,13 +351,18 @@ impl<S: System> Engine<S> {
 
     fn undo_entry(&mut self, e: &JournalEntry, force: bool) -> UndoOutcome {
         let hint = self.hint_for(e);
+        if self.belongs_to_other_account(e) {
+            // Its HKCU / apps are not the ones this process sees: never touch.
+            return UndoOutcome::OtherAccount(describe_key(&e.key, hint.as_ref()));
+        }
+        let sid = e.user_sid.as_deref();
         let current = match observe_key(&e.key, &mut self.sys, hint.as_ref()) {
             Ok(c) => c,
             Err(err) => return UndoOutcome::Failed(err.to_string()),
         };
         let at_after = current.as_ref() == Some(&e.after);
         if !at_after && current.as_ref() == Some(&e.before) {
-            return match self.journal.remove(&e.key) {
+            return match self.journal.remove(&e.key, sid) {
                 Ok(()) => UndoOutcome::AlreadyOriginal,
                 Err(err) => {
                     UndoOutcome::Failed(format!("could not update the undo journal: {err}"))
@@ -354,7 +384,7 @@ impl<S: System> Engine<S> {
             },
             Err(err) => return UndoOutcome::Failed(err.to_string()),
         };
-        match self.journal.remove(&e.key) {
+        match self.journal.remove(&e.key, sid) {
             Ok(()) => outcome,
             Err(err) => UndoOutcome::Failed(format!(
                 "restored, but could not update the undo journal: {err}"
@@ -381,7 +411,8 @@ impl<S: System> Engine<S> {
         if current == after {
             return Ok(());
         }
-        let prev_entry = self.journal.all().into_iter().find(|e| e.key == key);
+        let sid = self.key_sid(&key, false);
+        let prev_entry = self.journal.find(&key, sid.as_deref());
         self.journal
             .record(JournalEntry {
                 key: key.clone(),
@@ -390,13 +421,14 @@ impl<S: System> Engine<S> {
                 before: current,
                 after,
                 applied_at: now_rfc3339(),
+                user_sid: sid.clone(),
             })
             .map_err(|e| SysError::Other(format!("could not write the undo journal: {e}")))?;
         if let Err(err) = self.sys.reg_set(hive, path, name, value.as_ref()) {
             // Nothing changed on the system; put the journal back as it was.
             let _ = match prev_entry {
                 Some(prev) => self.journal.record(prev),
-                None => self.journal.remove(&key),
+                None => self.journal.remove(&key, sid.as_deref()),
             };
             return Err(err);
         }
@@ -784,6 +816,7 @@ reinstall = "9NBLGGH18846"
                 before: Snapshot::Reg(Some(RegData::Dword(0))),
                 after: Snapshot::Reg(Some(RegData::Dword(1))),
                 applied_at: now_rfc3339(),
+                user_sid: None,
             })
             .unwrap();
         let u = e.undo(&ids(&["a"]), false);
@@ -851,6 +884,7 @@ reinstall = "9NBLGGH18846"
                 before: Snapshot::Reg(Some(RegData::String("orig".into()))),
                 after: Snapshot::Reg(Some(RegData::String("x".into()))),
                 applied_at: now_rfc3339(),
+                user_sid: None,
             })
             .unwrap();
         let u = e.undo(&ids(&["startup:app"]), false);
@@ -876,6 +910,65 @@ reinstall = "9NBLGGH18846"
             Some(RegData::String("on".into()))
         );
         assert!(e.journal.all().is_empty());
+    }
+
+    #[test]
+    fn per_user_entries_are_tagged_with_the_account_sid() {
+        let d = tempfile::tempdir().unwrap();
+        let mut e = engine_with(base_sys(), &d);
+        apply_ids(&mut e, &["user", "a", "candy"]);
+        let sid = Some(crate::system::fake::DEFAULT_SID.to_string());
+        assert_eq!(e.journal.for_tweak("user")[0].user_sid, sid, "HKCU value");
+        assert_eq!(e.journal.for_tweak("candy")[0].user_sid, sid, "Appx package");
+        assert!(e.journal.for_tweak("a").iter().all(|x| x.user_sid.is_none()), "HKLM + service");
+    }
+
+    #[test]
+    fn undo_all_leaves_another_accounts_entries_untouched() {
+        let d = tempfile::tempdir().unwrap();
+        let mut e = engine_with(base_sys(), &d);
+        apply_ids(&mut e, &["user", "b"]);
+        let (h, p, n) = (Hive::Hkcu, r"Software\U", "V");
+        assert_eq!(e.sys.reg_get(h, p, n).unwrap(), Some(RegData::Dword(1)));
+
+        // Featherweight now runs as a different account.
+        e.sys.user_sid = Some("S-1-5-21-9-9-9-2002".into());
+        let u = e.undo_all(false);
+        let user = u.iter().find(|(id, _)| id == "user").unwrap();
+        assert!(
+            matches!(&user.1[..], [UndoOutcome::OtherAccount(w)] if w.contains(r"Software\U")),
+            "{u:?}"
+        );
+        assert_eq!(u.iter().find(|(id, _)| id == "b").unwrap().1, vec![UndoOutcome::Restored]);
+        assert_eq!(e.sys.reg_get(h, p, n).unwrap(), Some(RegData::Dword(1)), "not touched");
+        assert_eq!(e.journal.for_tweak("user").len(), 1, "entry kept for its owner");
+        assert!(e.journal.for_tweak("b").is_empty());
+
+        // Back as the owner, it undoes normally.
+        e.sys.user_sid = Some(crate::system::fake::DEFAULT_SID.into());
+        assert_eq!(e.undo_all(false), vec![("user".into(), vec![UndoOutcome::Restored])]);
+        assert_eq!(e.sys.reg_get(h, p, n).unwrap(), None);
+    }
+
+    #[test]
+    fn same_key_applied_by_two_accounts_is_journaled_twice() {
+        let d = tempfile::tempdir().unwrap();
+        let mut e = engine_with(base_sys(), &d);
+        apply_ids(&mut e, &["user"]);
+        // Another account, whose own HKCU value is still absent.
+        e.sys.user_sid = Some("S-1-5-21-9-9-9-2002".into());
+        e.sys.reg_set(Hive::Hkcu, r"Software\U", "V", None).unwrap();
+        assert_eq!(apply_ids(&mut e, &["user"]), vec![("user".into(), ApplyOutcome::Applied)]);
+        let entries = e.journal.for_tweak("user");
+        assert_eq!(entries.len(), 2);
+        assert_ne!(entries[0].user_sid, entries[1].user_sid);
+        // Undo as the second account removes only its own entry.
+        let u = e.undo(&ids(&["user"]), false);
+        assert!(u[0].1.contains(&UndoOutcome::Restored), "{u:?}");
+        assert!(u[0].1.iter().any(|o| matches!(o, UndoOutcome::OtherAccount(_))), "{u:?}");
+        let left = e.journal.for_tweak("user");
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].user_sid.as_deref(), Some(crate::system::fake::DEFAULT_SID));
     }
 
     #[test]

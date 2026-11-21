@@ -34,6 +34,9 @@ impl SysError {
 }
 
 pub trait System {
+    /// String SID (`S-1-5-21-…`) of the account this process runs as, whose
+    /// HKCU hive and Appx packages per-user actions change. `None` if unknown.
+    fn current_user_sid(&self) -> Option<String>;
     fn reg_get(&self, hive: Hive, path: &str, name: &str) -> Result<Option<RegData>, SysError>;
     /// `None` deletes the value; keys are created as needed.
     fn reg_set(

@@ -85,6 +85,8 @@ export type UndoOutcome =
   | { kind: "changedSince"; what: string }
   /** A removed app: `app` is its package name, `hint` its Store product id. */
   | { kind: "manualReinstall"; app: string; hint: string | null }
+  /** Journaled for another Windows account and left alone; `what` names the value. */
+  | { kind: "otherAccount"; what: string }
   | { kind: "failed"; message: string };
 
 /** commands::UndoResult */

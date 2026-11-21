@@ -138,6 +138,8 @@ pub enum UndoOutcomeView {
     ChangedSince { what: String },
     /// `app` is the removed package's name, `hint` its Store product id.
     ManualReinstall { app: String, hint: Option<String> },
+    /// Journaled for another Windows account; `what` names the value.
+    OtherAccount { what: String },
     Failed { message: String },
 }
 
@@ -148,6 +150,7 @@ impl From<UndoOutcome> for UndoOutcomeView {
             UndoOutcome::AlreadyOriginal => Self::AlreadyOriginal,
             UndoOutcome::ChangedSince(what) => Self::ChangedSince { what },
             UndoOutcome::ManualReinstall { app, hint } => Self::ManualReinstall { app, hint },
+            UndoOutcome::OtherAccount(what) => Self::OtherAccount { what },
             UndoOutcome::Failed(message) => Self::Failed { message },
         }
     }

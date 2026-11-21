@@ -12,8 +12,10 @@ use ::windows::Win32::Foundation::{
     ERROR_MORE_DATA, ERROR_SERVICE_ALREADY_RUNNING, ERROR_SERVICE_DOES_NOT_EXIST,
     ERROR_SERVICE_NOT_ACTIVE, HANDLE,
 };
+use ::windows::Win32::Foundation::{HLOCAL, LocalFree};
+use ::windows::Win32::Security::Authorization::ConvertSidToStringSidW;
 use ::windows::Win32::Security::{
-    GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,
+    GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TOKEN_USER, TokenElevation, TokenUser,
 };
 use ::windows::Win32::System::Services::{
     ChangeServiceConfigW, CloseServiceHandle, ControlService, ENUM_SERVICE_TYPE, OpenSCManagerW,
@@ -90,6 +92,46 @@ fn is_elevated() -> bool {
         let _ = CloseHandle(token);
     }
     ok && elev.TokenIsElevated != 0
+}
+
+/// String SID of this process's user, read once from its token.
+fn process_user_sid() -> Option<String> {
+    static SID: OnceLock<Option<String>> = OnceLock::new();
+    SID.get_or_init(|| {
+        let mut token = HANDLE::default();
+        // SAFETY: pseudo-handle and a valid out-pointer; the token is closed below.
+        unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) }.ok()?;
+        let mut len = 0u32;
+        // SAFETY: size probe with no buffer.
+        let _ = unsafe { GetTokenInformation(token, TokenUser, None, 0, &mut len) };
+        // 8-byte aligned storage for TOKEN_USER.
+        let mut buf = vec![0u64; (len as usize).div_ceil(8).max(1)];
+        // SAFETY: `buf` holds at least `len` bytes.
+        let ok = unsafe {
+            GetTokenInformation(token, TokenUser, Some(buf.as_mut_ptr().cast()), len, &mut len)
+        }
+        .is_ok();
+        // SAFETY: `token` was opened above and is closed exactly once.
+        unsafe {
+            let _ = CloseHandle(token);
+        }
+        if !ok {
+            return None;
+        }
+        // SAFETY: the call above filled a TOKEN_USER whose SID points into `buf`.
+        let sid = unsafe { (*buf.as_ptr().cast::<TOKEN_USER>()).User.Sid };
+        let mut text = ::windows::core::PWSTR::null();
+        // SAFETY: valid SID; the returned string is LocalAlloc'd and freed below.
+        unsafe { ConvertSidToStringSidW(sid, &mut text) }.ok()?;
+        // SAFETY: `text` is a valid NUL-terminated string until freed.
+        let s = unsafe { text.to_string() }.ok();
+        // SAFETY: freed exactly once.
+        unsafe {
+            let _ = LocalFree(Some(HLOCAL(text.0.cast())));
+        }
+        s
+    })
+    .clone()
 }
 
 struct Output {
@@ -386,6 +428,10 @@ fn enabled_from_xml(xml: &str) -> Result<bool, SysError> {
 // ------------------------------------------------------------------ System
 
 impl System for WindowsSystem {
+    fn current_user_sid(&self) -> Option<String> {
+        process_user_sid()
+    }
+
     fn reg_get(&self, hive: Hive, path: &str, name: &str) -> Result<Option<RegData>, SysError> {
         let key = match root(hive).open_subkey_with_flags(path, KEY_READ | KEY_WOW64_64KEY) {
             Ok(k) => k,

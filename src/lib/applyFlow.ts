@@ -231,6 +231,9 @@ export function storeLink(productId: string): string | null {
   return /^[A-Za-z0-9]+$/.test(productId) ? `ms-windows-store://pdp/?ProductId=${productId}` : null;
 }
 
+export const OTHER_ACCOUNT_DETAIL =
+  "Featherweight changed this for another Windows account. Run it as that account to undo it.";
+
 /**
  * Undo outcomes grouped for ResultSummary. Each tweak gets one row in its
  * most serious group (Failed > Changed since > Restored > Already original)
@@ -245,9 +248,13 @@ export function groupUndoReport(report: UndoReport, tweaks: TweakView[]): Result
   const changed: ResultItem[] = [];
   const manual: ResultItem[] = [];
   const failed: ResultItem[] = [];
+  const other: ResultItem[] = [];
   for (const r of report.results) {
     const item: ResultItem = { id: r.id, title: title(r.id) };
-    const rest = r.outcomes.filter((o) => o.kind !== "manualReinstall");
+    const rest = r.outcomes.filter((o) => o.kind !== "manualReinstall" && o.kind !== "otherAccount");
+    if (r.outcomes.some((o) => o.kind === "otherAccount")) {
+      other.push({ ...item, detail: OTHER_ACCOUNT_DETAIL });
+    }
     for (const o of r.outcomes) {
       if (o.kind !== "manualReinstall") continue;
       manual.push({
@@ -275,6 +282,7 @@ export function groupUndoReport(report: UndoReport, tweaks: TweakView[]): Result
     { label: "Already original", tone: "muted", items: original },
     { label: "Changed since", tone: "bad", items: changed },
     { label: "Reinstall manually", tone: "muted", items: manual },
+    { label: "Belongs to another account", tone: "muted", items: other },
     { label: "Failed", tone: "bad", items: failed },
   ];
   return groups.filter((g) => g.items.length > 0);
@@ -312,6 +320,7 @@ export function resultHeadline(groups: ResultGroup[]): { title: string; summary?
     };
   if (applied + restored === 0) {
     if (count("Reinstall manually") > 0) return { title: "Some apps need reinstalling" };
+    if (count("Belongs to another account") > 0) return { title: "These changes belong to another account" };
     return { title: "Nothing needed changing", summary: "This PC already had these settings." };
   }
   if (restored === 0) return { title: `${plural(applied)} applied` };

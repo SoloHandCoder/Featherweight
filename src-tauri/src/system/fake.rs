@@ -44,7 +44,12 @@ pub struct FakeSystem {
     /// `stop_service` really stops the service, then reports an error
     /// (models a timeout after the stop was requested).
     pub stop_then_fail: bool,
+    /// What `current_user_sid` reports.
+    pub user_sid: Option<String>,
 }
+
+/// SID the fake reports unless a test changes `user_sid`.
+pub const DEFAULT_SID: &str = "S-1-5-21-1000-1000-1000-1001";
 
 fn rk(hive: Hive, path: &str, name: &str) -> RegKey {
     (hive, path.to_lowercase(), name.to_lowercase())
@@ -79,6 +84,7 @@ impl FakeSystem {
             service_calls: Vec::new(),
             fail_stop: None,
             stop_then_fail: false,
+            user_sid: Some(DEFAULT_SID.to_string()),
         }
     }
 
@@ -150,6 +156,10 @@ impl FakeSystem {
 }
 
 impl System for FakeSystem {
+    fn current_user_sid(&self) -> Option<String> {
+        self.user_sid.clone()
+    }
+
     fn reg_get(&self, hive: Hive, path: &str, name: &str) -> Result<Option<RegData>, SysError> {
         if self.fail_reads.iter().any(|n| n.eq_ignore_ascii_case(name)) {
             return Err(SysError::Other(format!("simulated read failure: {name}")));

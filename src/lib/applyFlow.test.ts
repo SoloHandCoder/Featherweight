@@ -5,6 +5,7 @@ import {
   groupApplyReport,
   groupUndoReport,
   mergeUndoReport,
+  OTHER_ACCOUNT_DETAIL,
   planApply,
   restorePointStep,
   resultHeadline,
@@ -365,6 +366,30 @@ describe("groupUndoReport", () => {
       ["Restored", ["Title junk"]],
       ["Reinstall manually", ["Candy Crush Saga"]],
     ]);
+  });
+
+  it("lists values journaled for another account on their own", () => {
+    const groups = groupUndoReport(
+      {
+        results: [
+          { id: "ads", outcomes: [{ kind: "otherAccount", what: "HKCU\\X" }] },
+          { id: "junk", outcomes: [{ kind: "restored" }, { kind: "otherAccount", what: "HKCU\\Y" }] },
+        ],
+      },
+      tweaks,
+    );
+    expect(groups).toEqual([
+      { label: "Restored", tone: "ok", items: [{ id: "junk", title: "Title junk" }] },
+      {
+        label: "Belongs to another account",
+        tone: "muted",
+        items: [
+          { id: "ads", title: "Title ads", detail: OTHER_ACCOUNT_DETAIL },
+          { id: "junk", title: "Title junk", detail: OTHER_ACCOUNT_DETAIL },
+        ],
+      },
+    ]);
+    expect(resultHeadline(groups.slice(1)).title).toBe("These changes belong to another account");
   });
 
   it("builds a Store link only from a product id", () => {

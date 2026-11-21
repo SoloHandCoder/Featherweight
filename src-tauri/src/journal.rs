@@ -26,6 +26,11 @@ pub struct JournalEntry {
     pub after: Snapshot,
     /// RFC 3339 UTC, fixed millisecond precision (string order == time order).
     pub applied_at: String,
+    /// SID of the account whose state a per-user key (HKCU value, Appx
+    /// package, per-user script) belongs to; `None` for system-wide keys and
+    /// for entries written before this field existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_sid: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -76,10 +81,11 @@ impl Journal {
         Ok(Journal { path, entries })
     }
 
-    /// Records an entry. For an existing key the original `before` is kept.
+    /// Records an entry. For an existing (key, account) the original `before`
+    /// is kept; the same key of another account is a separate entry.
     pub fn record(&mut self, e: JournalEntry) -> Result<(), JournalError> {
         let prev = self.entries.clone();
-        match self.entries.iter_mut().find(|x| x.key == e.key) {
+        match self.entries.iter_mut().find(|x| x.key == e.key && x.user_sid == e.user_sid) {
             Some(existing) => {
                 let before = existing.before.clone();
                 *existing = JournalEntry { before, ..e };
@@ -89,9 +95,10 @@ impl Journal {
         self.persist_or_rollback(prev)
     }
 
-    pub fn remove(&mut self, key: &ValueKey) -> Result<(), JournalError> {
+    /// Removes the entry for `key` of account `sid` (`None` = system-wide).
+    pub fn remove(&mut self, key: &ValueKey, sid: Option<&str>) -> Result<(), JournalError> {
         let prev = self.entries.clone();
-        self.entries.retain(|x| &x.key != key);
+        self.entries.retain(|x| !(&x.key == key && x.user_sid.as_deref() == sid));
         self.persist_or_rollback(prev)
     }
 
@@ -101,6 +108,11 @@ impl Journal {
             .filter(|e| e.tweak_id == id)
             .cloned()
             .collect()
+    }
+
+    /// The entry for `key` of account `sid`, if any.
+    pub fn find(&self, key: &ValueKey, sid: Option<&str>) -> Option<JournalEntry> {
+        self.entries.iter().find(|e| &e.key == key && e.user_sid.as_deref() == sid).cloned()
     }
 
     /// Newest first; ties keep reverse insertion order.
@@ -167,6 +179,7 @@ mod tests {
             before: Snapshot::Reg(Some(RegData::Dword(before))),
             after: Snapshot::Reg(Some(RegData::Dword(after))),
             applied_at: at.into(),
+            user_sid: None,
         }
     }
 
@@ -213,6 +226,47 @@ mod tests {
     }
 
     #[test]
+    fn same_key_for_different_accounts_is_kept_separately() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("journal.json");
+        let mut j = Journal::load(p.clone()).unwrap();
+        let mut a = entry(reg_key("A"), "t", 1, 2, "2026-01-01T00:00:00.000Z");
+        a.user_sid = Some("S-1-5-21-1".into());
+        let mut b = entry(reg_key("A"), "t", 5, 2, "2026-01-01T00:00:01.000Z");
+        b.user_sid = Some("S-1-5-21-2".into());
+        j.record(a.clone()).unwrap();
+        j.record(b.clone()).unwrap();
+        assert_eq!(j.all().len(), 2, "never merged across accounts");
+        // Re-recording account 1 merges with account 1's entry only.
+        let mut a2 = entry(reg_key("A"), "t", 2, 3, "2026-01-02T00:00:00.000Z");
+        a2.user_sid = a.user_sid.clone();
+        j.record(a2).unwrap();
+        let all = Journal::load(p.clone()).unwrap().all();
+        assert_eq!(all.len(), 2);
+        let mine = all.iter().find(|e| e.user_sid == a.user_sid).unwrap();
+        assert_eq!(mine.before, Snapshot::Reg(Some(RegData::Dword(1))));
+        let theirs = all.iter().find(|e| e.user_sid == b.user_sid).unwrap();
+        assert_eq!(theirs.before, Snapshot::Reg(Some(RegData::Dword(5))));
+        j.remove(&reg_key("A"), a.user_sid.as_deref()).unwrap();
+        assert_eq!(Journal::load(p).unwrap().all(), vec![b]);
+    }
+
+    #[test]
+    fn old_entries_without_user_sid_still_load() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("journal.json");
+        std::fs::write(
+            &p,
+            br#"{"version":1,"entries":[{"key":{"service":{"name":"svc"}},"tweak_id":"t","action_index":0,
+            "before":{"service":"automatic"},"after":{"service":"disabled"},"applied_at":"2026-01-01T00:00:00.000Z"}]}"#,
+        )
+        .unwrap();
+        let all = Journal::load(p).unwrap().all();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].user_sid, None);
+    }
+
+    #[test]
     fn remove_deletes_entry() {
         let d = tempfile::tempdir().unwrap();
         let p = d.path().join("journal.json");
@@ -227,10 +281,11 @@ mod tests {
             before: Snapshot::Service(StartType::Automatic),
             after: Snapshot::Service(StartType::Disabled),
             applied_at: "2026-01-01T00:00:01.000Z".into(),
+            user_sid: None,
         })
         .unwrap();
-        j.remove(&svc).unwrap();
-        j.remove(&svc).unwrap(); // idempotent
+        j.remove(&svc, None).unwrap();
+        j.remove(&svc, None).unwrap(); // idempotent
         let j2 = Journal::load(p).unwrap();
         assert_eq!(j2.all().len(), 1);
         assert_eq!(j2.all()[0].key, reg_key("A"));
