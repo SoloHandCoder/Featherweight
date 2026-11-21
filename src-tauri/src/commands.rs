@@ -94,6 +94,9 @@ pub struct TweakView {
     pub all_users_optional: bool,
     /// The tweak that can't be on at the same time as this one.
     pub exclusive_with: Option<String>,
+    /// Presets this tweak is part of on this PC (Safe here and applicable),
+    /// so the UI needs no separate `preview_preset` round per refresh.
+    pub presets: Vec<Preset>,
 }
 
 #[derive(Serialize, Debug, Clone, PartialEq)]
@@ -208,11 +211,16 @@ impl From<RestorePointOutcome> for RestorePointView {
 
 // ------------------------------------------------------------- pure helpers
 
+/// One status pass over the catalog: each action is observed exactly once.
 pub fn tweak_views<S: System>(e: &mut Engine<S>) -> Vec<TweakView> {
     let tweaks = e.catalog.tweaks.clone();
     tweaks
         .iter()
-        .map(|t| TweakView {
+        .map(|t| (t, e.status(&t.id)))
+        .collect::<Vec<_>>()
+        .into_iter()
+        .map(|(t, status)| TweakView {
+            presets: env::preset_membership(t, &e.env, &status),
             id: t.id.clone(),
             title: t.title.clone(),
             description: t.description.clone(),
@@ -220,7 +228,7 @@ pub fn tweak_views<S: System>(e: &mut Engine<S>) -> Vec<TweakView> {
             level: env::effective_level(t, &e.env),
             irreversible: t.irreversible,
             per_user: t.is_per_user(),
-            status: e.status(&t.id).into(),
+            status: status.into(),
             changes: t.actions.iter().map(actions::describe).collect(),
             reinstall_hint: t.actions.iter().find_map(|a| match a {
                 ActionDef::Appx { reinstall, .. } => reinstall.clone(),
@@ -268,6 +276,14 @@ fn lock<T>(m: &Mutex<T>) -> Result<MutexGuard<'_, T>, String> {
     m.lock().map_err(|_| {
         "An earlier operation crashed. Restart Featherweight before trying again.".to_string()
     })
+}
+
+/// Locks the engine for one command and drops the system's per-command
+/// caches, so the command sees the PC as it is now.
+fn lock_fresh<S: System>(m: &Mutex<Engine<S>>) -> Result<MutexGuard<'_, Engine<S>>, String> {
+    let mut e = lock(m)?;
+    e.sys.begin_command();
+    Ok(e)
 }
 
 /// Runs `f` on the blocking thread pool so the UI thread never waits on it.
@@ -363,7 +379,7 @@ pub async fn get_overview(state: State<'_, AppState>) -> Result<Overview, String
 #[tauri::command]
 pub async fn list_tweaks(state: State<'_, AppState>) -> Result<Vec<TweakView>, String> {
     let engine = state.engine.clone();
-    blocking(move || Ok(tweak_views(&mut *lock(&engine)?))).await
+    blocking(move || Ok(tweak_views(&mut *lock_fresh(&engine)?))).await
 }
 
 #[tauri::command]
@@ -372,7 +388,7 @@ pub async fn preview_preset(
     preset: Preset,
 ) -> Result<Vec<String>, String> {
     let engine = state.engine.clone();
-    blocking(move || Ok(env::resolve_preset(&mut *lock(&engine)?, preset))).await
+    blocking(move || Ok(env::resolve_preset(&mut *lock_fresh(&engine)?, preset))).await
 }
 
 #[tauri::command]
@@ -386,7 +402,7 @@ pub async fn apply_tweaks(
     require_restore_attempted(&RESTORE_ATTEMPTED)?;
     let engine = state.engine.clone();
     blocking(move || {
-        let mut e = lock(&engine)?;
+        let mut e = lock_fresh(&engine)?;
         let all_users: HashSet<String> = all_users.into_iter().collect();
         let results = e.apply(&ids, &all_users, &mut |p| {
             let _ = app.emit(APPLY_PROGRESS, ProgressView::from(p));
@@ -407,14 +423,14 @@ pub async fn undo_tweaks(
 ) -> Result<UndoReport, String> {
     journal_ok(&state)?;
     let engine = state.engine.clone();
-    blocking(move || Ok(undo_report(lock(&engine)?.undo(&ids, force)))).await
+    blocking(move || Ok(undo_report(lock_fresh(&engine)?.undo(&ids, force)))).await
 }
 
 #[tauri::command]
 pub async fn undo_all(state: State<'_, AppState>, force: bool) -> Result<UndoReport, String> {
     journal_ok(&state)?;
     let engine = state.engine.clone();
-    blocking(move || Ok(undo_report(lock(&engine)?.undo_all(force)))).await
+    blocking(move || Ok(undo_report(lock_fresh(&engine)?.undo_all(force)))).await
 }
 
 #[tauri::command]
@@ -572,9 +588,11 @@ value = { dword = 1 }
             reinstall_hint: Some("hint".into()),
             all_users_optional: true,
             exclusive_with: Some("y".into()),
+            presets: vec![Preset::Gaming],
         };
         let j = serde_json::to_value(&v).unwrap();
         assert_eq!(j["exclusiveWith"], "y");
+        assert_eq!(j["presets"], serde_json::json!(["gaming"]));
         assert_eq!(j["reinstallHint"], "hint");
         assert_eq!(j["perUser"], true);
         assert_eq!(j["allUsersOptional"], true);
@@ -694,6 +712,76 @@ value = { dword = 1 }
         assert_eq!(got, want);
         let bare = regex::Regex::new(r"^[A-Za-z0-9]+$").unwrap();
         assert!(got.iter().filter_map(|(_, h)| h.as_deref()).all(|h| bare.is_match(h)));
+    }
+
+    /// Three Appx actions, one PowerShell check, in both presets.
+    const TWEAK_APPS: &str = r#"
+id = "apps"
+title = "Apps"
+description = "D"
+section = "remove"
+level = "safe"
+presets = ["everyday", "gaming"]
+
+[[actions]]
+type = "appx"
+package = "A.One"
+all_users = "always"
+
+[[actions]]
+type = "appx"
+package = "A.Two"
+all_users = "always"
+
+[[actions]]
+type = "appx"
+package = "A.Three"
+all_users = "always"
+"#;
+
+    const TWEAK_SCRIPT: &str = r#"
+id = "script"
+title = "Script"
+description = "D"
+section = "gaming"
+level = "safe"
+presets = ["gaming"]
+
+[[actions]]
+type = "powershell"
+check = "chk"
+apply = "app"
+undo = "und"
+"#;
+
+    #[test]
+    fn tweak_views_observe_each_action_once_and_carry_preset_membership() {
+        let d = tempfile::tempdir().unwrap();
+        let catalog = Catalog::from_strs(&[TWEAK_APPS, TWEAK_SCRIPT, TWEAK_NEW]).unwrap();
+        let sys = FakeSystem::new()
+            .with_appx("A.One", true)
+            .with_appx("A.Two", true)
+            .with_appx("A.Three", false)
+            .with_ps("chk", "0");
+        let journal = Journal::load(d.path().join("journal.json")).unwrap();
+        let env = Env { build: 22631, is_laptop: false, per_user_allowed: true };
+        let mut e = Engine::new(sys, catalog, journal, env);
+        let views = tweak_views(&mut e);
+        // One status pass per refresh: every action observed exactly once.
+        assert_eq!(e.sys.appx_queries.get(), 3);
+        assert_eq!(e.sys.ps_calls, vec!["chk"]);
+        use crate::model::Preset::{Everyday, Gaming};
+        let presets: Vec<(&str, Vec<Preset>)> =
+            views.iter().map(|v| (v.id.as_str(), v.presets.clone())).collect();
+        assert_eq!(
+            presets,
+            vec![("apps", vec![Everyday, Gaming]), ("script", vec![Gaming]), ("newbuild", vec![])]
+        );
+        // Same answer as the preview command, which observes again.
+        assert_eq!(env::resolve_preset(&mut e, Gaming), vec!["apps", "script"]);
+        assert_eq!(env::resolve_preset(&mut e, Everyday), vec!["apps"]);
+        let j = serde_json::to_value(&views[0]).unwrap();
+        assert_eq!(j["presets"], serde_json::json!(["everyday", "gaming"]));
     }
 
     #[test]

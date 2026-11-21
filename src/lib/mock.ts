@@ -171,7 +171,11 @@ const listeners = new Set<(p: Progress) => void>();
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 function views(): TweakView[] {
-  return catalog.map(({ presets: _p, ...v }) => ({ ...v, status: status.get(v.id)! }));
+  return catalog.map((v) => {
+    const st = status.get(v.id)!;
+    const inPresets = v.level === "safe" && st.kind !== "notApplicable";
+    return { ...v, status: st, presets: inPresets ? v.presets : [] };
+  });
 }
 
 /** Copilot's value was "changed since" until forced; irreversible ones need a reinstall. */

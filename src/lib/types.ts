@@ -57,6 +57,8 @@ export interface TweakView {
   allUsersOptional: boolean;
   /** Id of the tweak that can't be on together with this one. */
   exclusiveWith: string | null;
+  /** Presets this tweak is part of on this PC (Safe here and applicable). */
+  presets: Preset[];
 }
 
 /** commands::ApplyOutcomeView */

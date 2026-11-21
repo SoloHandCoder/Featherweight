@@ -2,9 +2,17 @@
 // switches would change. A switch shows the wanted end state; only the
 // difference from the PC's current state is sent to the backend.
 
-import type { Section, TweakView } from "./types";
+import type { Preset, Section, TweakView } from "./types";
 
 export type Toggles = Record<string, boolean>;
+
+/**
+ * Ids (catalog order) of the preset's tweaks that are Safe and applicable on
+ * this PC, read from `list_tweaks` so a refresh needs no `previewPreset` calls.
+ */
+export function presetIds(tweaks: TweakView[], preset: Preset): string[] {
+  return tweaks.filter((t) => t.presets.includes(preset)).map((t) => t.id);
+}
 
 function isOn(t: TweakView): boolean {
   return t.status.kind === "applied" || t.status.kind === "partial";

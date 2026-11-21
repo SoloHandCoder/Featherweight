@@ -36,7 +36,7 @@ fn load_journal() -> (Journal, Option<String>) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let (journal, journal_error) = load_journal();
-    let engine = Engine::new(WindowsSystem, Catalog::bundled(), journal, env::detect_env());
+    let engine = Engine::new(WindowsSystem::new(), Catalog::bundled(), journal, env::detect_env());
     let state = AppState {
         engine: Arc::new(Mutex::new(engine)),
         restore: Arc::new(Mutex::new(RestoreGuard::default())),

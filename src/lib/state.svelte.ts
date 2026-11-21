@@ -6,6 +6,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { backend } from "./backend";
 import { beginBusy, endBusy, type Busy } from "./busy";
 import { dialogClosed, dialogOpened, recordChange } from "./counters";
+import { presetIds } from "./selection";
 import type { Overview, Preset, TweakView, UndoReport } from "./types";
 
 export type Page = "home" | "remove" | "background" | "gaming" | "cleanup";
@@ -24,7 +25,7 @@ export const app = $state({
   page: "home" as Page,
   tweaks: [] as TweakView[],
   overview: null as Overview | null,
-  /** Ids from `previewPreset`: the preset's Safe tweaks that apply on this PC. */
+  /** The preset's Safe tweaks that apply on this PC (from `listTweaks`). */
   presets: { everyday: [], gaming: [] } as Record<Preset, string[]>,
   /** Last refresh error, shown in an inline banner. Null when fine. */
   error: null as string | null,
@@ -74,7 +75,10 @@ export function message(e: unknown): string {
   return String(e);
 }
 
-/** Reloads the overview, the tweak list and the preset previews; failures land in `app.error`. */
+/**
+ * Reloads the overview and the tweak list (which also says which tweaks each
+ * preset holds: one status pass on the backend); failures land in `app.error`.
+ */
 export async function refresh(): Promise<void> {
   if (import.meta.env.DEV && useMock) {
     backend.api = (await import("./mock")).mockApi;
@@ -87,15 +91,10 @@ export async function refresh(): Promise<void> {
   app.loading = true;
   try {
     const api = backend.api;
-    const [overview, tweaks, everyday, gaming] = await Promise.all([
-      api.getOverview(),
-      api.listTweaks(),
-      api.previewPreset("everyday"),
-      api.previewPreset("gaming"),
-    ]);
+    const [overview, tweaks] = await Promise.all([api.getOverview(), api.listTweaks()]);
     app.overview = overview;
     app.tweaks = tweaks;
-    app.presets = { everyday, gaming };
+    app.presets = { everyday: presetIds(tweaks, "everyday"), gaming: presetIds(tweaks, "gaming") };
     app.error = null;
   } catch (e) {
     app.error = message(e);

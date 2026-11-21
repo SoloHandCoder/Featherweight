@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { defaultToggles, pendingChanges, setToggle, switchToggle, visibleTweaks } from "./selection";
-import type { Level, TweakStatus, TweakView } from "./types";
+import { defaultToggles, pendingChanges, presetIds, setToggle, switchToggle, visibleTweaks } from "./selection";
+import type { Level, Preset, TweakStatus, TweakView } from "./types";
 
 function tweak(
   id: string,
   status: TweakStatus["kind"] = "notApplied",
   level: Level = "safe",
   exclusiveWith: string | null = null,
+  presets: Preset[] = [],
 ): TweakView {
   return {
     id,
@@ -21,8 +22,22 @@ function tweak(
     reinstallHint: null,
     allUsersOptional: false,
     exclusiveWith,
+    presets,
   };
 }
+
+describe("presetIds", () => {
+  it("takes a preset's tweaks from list_tweaks in catalog order", () => {
+    const tweaks = [
+      tweak("a", "notApplied", "safe", null, ["everyday", "gaming"]),
+      tweak("b", "applied", "safe", null, ["gaming"]),
+      tweak("c"),
+      tweak("d", "partial", "safe", null, ["everyday", "gaming"]),
+    ];
+    expect(presetIds(tweaks, "everyday")).toEqual(["a", "d"]);
+    expect(presetIds(tweaks, "gaming")).toEqual(["a", "b", "d"]);
+  });
+});
 
 describe("pendingChanges", () => {
   it("toggle_on_unapplied_goes_to_apply", () => {

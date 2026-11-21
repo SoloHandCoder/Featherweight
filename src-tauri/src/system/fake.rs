@@ -44,6 +44,8 @@ pub struct FakeSystem {
     /// `stop_service` really stops the service, then reports an error
     /// (models a timeout after the stop was requested).
     pub stop_then_fail: bool,
+    /// Number of `appx_installed` calls.
+    pub appx_queries: std::cell::Cell<usize>,
     /// What `current_user_sid` reports.
     pub user_sid: Option<String>,
 }
@@ -84,6 +86,7 @@ impl FakeSystem {
             service_calls: Vec::new(),
             fail_stop: None,
             stop_then_fail: false,
+            appx_queries: std::cell::Cell::new(0),
             user_sid: Some(DEFAULT_SID.to_string()),
         }
     }
@@ -268,6 +271,7 @@ impl System for FakeSystem {
     }
 
     fn appx_installed(&self, package: &str) -> Result<Option<bool>, SysError> {
+        self.appx_queries.set(self.appx_queries.get() + 1);
         if !self.known_appx.contains(package) {
             return Ok(None);
         }

@@ -32,6 +32,7 @@ function tweak(id: string, irreversible = false, changes: string[] = []): TweakV
     reinstallHint: null,
     allUsersOptional: false,
     exclusiveWith: null,
+    presets: [],
   };
 }
 

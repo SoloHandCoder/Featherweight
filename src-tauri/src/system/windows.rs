@@ -36,13 +36,37 @@ use winreg::enums::{
     REG_BINARY, REG_DWORD, REG_EXPAND_SZ, REG_QWORD, REG_SZ,
 };
 
-use super::{SysError, System};
+use super::{AppxCache, SysError, System};
 use crate::model::{Hive, RegData, StartType};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Talks to the live Windows installation.
-pub struct WindowsSystem;
+#[derive(Default)]
+pub struct WindowsSystem {
+    /// Installed Appx packages, read once per command (see `begin_command`).
+    appx: AppxCache,
+}
+
+impl WindowsSystem {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+/// Names of every Appx package installed for the current user (one
+/// PowerShell launch, shared by all `appx_installed` checks of a command).
+fn appx_snapshot() -> Result<std::collections::HashSet<String>, SysError> {
+    let o = run_ps("$ErrorActionPreference='Stop';Get-AppxPackage | ForEach-Object { $_.Name }")?;
+    if !o.ok {
+        return Err(tool_err("Get-AppxPackage", &o, false));
+    }
+    Ok(parse_appx_names(&o.stdout))
+}
+
+fn parse_appx_names(stdout: &str) -> std::collections::HashSet<String> {
+    stdout.lines().map(str::trim).filter(|l| !l.is_empty()).map(String::from).collect()
+}
 
 // ---------------------------------------------------------------- helpers
 
@@ -428,6 +452,10 @@ fn enabled_from_xml(xml: &str) -> Result<bool, SysError> {
 // ------------------------------------------------------------------ System
 
 impl System for WindowsSystem {
+    fn begin_command(&mut self) {
+        self.appx.clear();
+    }
+
     fn current_user_sid(&self) -> Option<String> {
         process_user_sid()
     }
@@ -673,21 +701,10 @@ impl System for WindowsSystem {
     }
 
     /// `Some(true)` iff installed for the current user, else `Some(false)`.
+    /// Answered from one package list per command.
     fn appx_installed(&self, package: &str) -> Result<Option<bool>, SysError> {
         let p = package_name(package)?;
-        let script = format!(
-            "$ErrorActionPreference='Stop';\
-             if (@(Get-AppxPackage -Name '{p}').Count -gt 0) {{ 'yes' }} else {{ 'no' }}"
-        );
-        let o = run_ps(&script)?;
-        if !o.ok {
-            return Err(tool_err("Get-AppxPackage", &o, false));
-        }
-        match o.stdout.trim() {
-            "yes" => Ok(Some(true)),
-            "no" => Ok(Some(false)),
-            other => Err(SysError::Other(format!("unexpected appx query output: {other:?}"))),
-        }
+        self.appx.installed(p, appx_snapshot).map(Some)
     }
 
     fn remove_appx(&mut self, package: &str, all_users: bool) -> Result<(), SysError> {
@@ -705,7 +722,10 @@ impl System for WindowsSystem {
                  Get-AppxPackage -Name '{p}' | Remove-AppxPackage"
             )
         };
-        let o = run_ps(&script)?;
+        let o = run_ps(&script);
+        // Whatever happened, the cached package list may be stale now.
+        self.appx.clear();
+        let o = o?;
         if o.ok { Ok(()) } else { Err(tool_err("Remove-AppxPackage", &o, all_users)) }
     }
 
@@ -816,6 +836,14 @@ mod tests {
         assert_eq!(base64(b"f"), "Zg==");
         assert_eq!(base64(b"fo"), "Zm8=");
         assert_eq!(base64(b"foo"), "Zm9v");
+    }
+
+    #[test]
+    fn appx_names_are_parsed_one_per_line() {
+        let names = parse_appx_names("Microsoft.BingNews\r\n  king.com.CandyCrushSaga \r\n\r\n");
+        assert_eq!(names.len(), 2);
+        assert!(names.contains("Microsoft.BingNews") && names.contains("king.com.CandyCrushSaga"));
+        assert!(parse_appx_names("").is_empty());
     }
 
     #[test]

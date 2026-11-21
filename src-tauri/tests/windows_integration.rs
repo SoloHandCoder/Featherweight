@@ -22,7 +22,7 @@ impl Drop for Cleanup {
 #[ignore]
 fn reg_roundtrip_dword_string_delete() {
     let _c = Cleanup;
-    let mut sys = WindowsSystem;
+    let mut sys = WindowsSystem::new();
     assert_eq!(sys.reg_get(Hive::Hkcu, KEY, "D").unwrap(), None);
     let cases = [
         ("D", RegData::Dword(7)),
@@ -45,26 +45,26 @@ fn reg_roundtrip_dword_string_delete() {
 #[test]
 #[ignore]
 fn reads_start_type_of_a_known_service() {
-    let sys = WindowsSystem;
+    let sys = WindowsSystem::new();
     assert_eq!(sys.service_start("EventLog").unwrap(), Some(StartType::Automatic));
 }
 
 #[test]
 #[ignore]
 fn missing_service_is_none() {
-    assert_eq!(WindowsSystem.service_start("FwNoSuchService").unwrap(), None);
+    assert_eq!(WindowsSystem::new().service_start("FwNoSuchService").unwrap(), None);
 }
 
 #[test]
 #[ignore]
 fn missing_task_is_none() {
-    assert_eq!(WindowsSystem.task_enabled(r"\FwNoSuchTask\Nope").unwrap(), None);
+    assert_eq!(WindowsSystem::new().task_enabled(r"\FwNoSuchTask\Nope").unwrap(), None);
 }
 
 #[test]
 #[ignore]
 fn reads_task_state() {
-    let r = WindowsSystem.task_enabled(r"\Microsoft\Windows\Defrag\ScheduledDefrag");
+    let r = WindowsSystem::new().task_enabled(r"\Microsoft\Windows\Defrag\ScheduledDefrag");
     if elevated() {
         assert!(matches!(r, Ok(Some(_))), "{r:?}");
     } else {
@@ -89,14 +89,14 @@ fn elevated() -> bool {
 #[test]
 #[ignore]
 fn appx_missing_package_is_false() {
-    assert_eq!(WindowsSystem.appx_installed("Fw.NoSuchPackage").unwrap(), Some(false));
+    assert_eq!(WindowsSystem::new().appx_installed("Fw.NoSuchPackage").unwrap(), Some(false));
 }
 
 #[test]
 #[ignore]
 fn appx_rejects_unsafe_name() {
     assert!(matches!(
-        WindowsSystem.appx_installed(r"x'; Remove-Item C:\ #"),
+        WindowsSystem::new().appx_installed(r"x'; Remove-Item C:\ #"),
         Err(SysError::Other(_))
     ));
 }
@@ -104,7 +104,7 @@ fn appx_rejects_unsafe_name() {
 #[test]
 #[ignore]
 fn active_power_scheme_is_guid() {
-    let g = WindowsSystem.active_power_scheme().unwrap();
+    let g = WindowsSystem::new().active_power_scheme().unwrap();
     assert_eq!(g.len(), 36, "{g}");
     assert_eq!(g, g.to_lowercase());
     let parts: Vec<usize> = g.split('-').map(str::len).collect();
@@ -114,13 +114,13 @@ fn active_power_scheme_is_guid() {
 #[test]
 #[ignore]
 fn powershell_echo() {
-    assert_eq!(WindowsSystem.run_powershell("Write-Output 1").unwrap(), "1");
+    assert_eq!(WindowsSystem::new().run_powershell("Write-Output 1").unwrap(), "1");
 }
 
 #[test]
 #[ignore]
 fn reg_values_lists_run_key_read_only() {
-    let sys = WindowsSystem;
+    let sys = WindowsSystem::new();
     let vals = sys
         .reg_values(Hive::Hkcu, r"Software\Microsoft\Windows\CurrentVersion\Run")
         .unwrap();
@@ -133,7 +133,7 @@ fn reg_values_lists_run_key_read_only() {
 #[ignore]
 fn reg_roundtrip_expand_string() {
     let _c = Cleanup;
-    let mut sys = WindowsSystem;
+    let mut sys = WindowsSystem::new();
     let v = RegData::ExpandString(r"%APPDATA%\x.exe".into());
     sys.reg_set(Hive::Hkcu, KEY, "E", Some(&v)).unwrap();
     // Type is preserved (not downgraded to REG_SZ) and nothing is expanded.
@@ -155,7 +155,7 @@ fn unsupported_registry_type_is_other_error() {
         &winreg::RegValue { bytes: vec![0, 0, 0, 0].into(), vtype: REG_MULTI_SZ },
     )
     .unwrap();
-    let sys = WindowsSystem;
+    let sys = WindowsSystem::new();
     assert!(matches!(sys.reg_get(Hive::Hkcu, KEY, "M"), Err(SysError::Other(_))));
     // reg_values skips it rather than failing.
     assert!(sys.reg_values(Hive::Hkcu, KEY).unwrap().is_empty());

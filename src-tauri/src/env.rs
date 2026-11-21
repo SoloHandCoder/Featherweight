@@ -11,6 +11,15 @@ pub fn effective_level(t: &TweakDef, env: &Env) -> Level {
     if env.is_laptop { t.laptop_level.unwrap_or(t.level) } else { t.level }
 }
 
+/// The presets `t` belongs to on this PC: those it is listed in, if it is
+/// Safe here and applicable (`status` is its already-computed status).
+pub fn preset_membership(t: &TweakDef, env: &Env, status: &TweakStatus) -> Vec<Preset> {
+    if effective_level(t, env) != Level::Safe || matches!(status, TweakStatus::NotApplicable(_)) {
+        return Vec::new();
+    }
+    t.presets.clone()
+}
+
 /// Ids (catalog order) of tweaks in preset `p` that are Safe on this PC and
 /// applicable here. Startup apps are not catalog tweaks, so never included.
 pub fn resolve_preset<S: System>(engine: &mut Engine<S>, p: Preset) -> Vec<String> {

@@ -18,6 +18,34 @@ pub enum SysError {
     Other(String),
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn appx_cache_fetches_once_until_cleared() {
+        let cache = AppxCache::default();
+        let fetches = std::cell::Cell::new(0);
+        let fetch = || {
+            fetches.set(fetches.get() + 1);
+            Ok(HashSet::from(["Contoso.App".to_string()]))
+        };
+        assert!(cache.installed("contoso.app", fetch).unwrap(), "case-insensitive");
+        assert!(!cache.installed("Other.App", fetch).unwrap());
+        assert!(cache.installed("Contoso.App", fetch).unwrap());
+        assert_eq!(fetches.get(), 1);
+        cache.clear();
+        assert!(cache.installed("Contoso.App", fetch).unwrap());
+        assert_eq!(fetches.get(), 2);
+        // A failed fetch is not cached.
+        cache.clear();
+        assert!(cache.installed("x", || Err(SysError::Other("boom".into()))).is_err());
+        assert!(cache.installed("Contoso.App", fetch).unwrap());
+        assert_eq!(fetches.get(), 3);
+    }
+}
+
 /// Prefix of the `SysError::Other` message of a `stop_service` failure that
 /// happened AFTER the stop request was sent (the service may be stopped).
 const STOP_SENT: &str = "[stop-sent] ";
@@ -33,7 +61,36 @@ impl SysError {
     }
 }
 
+/// Installed Appx package names (lowercased) of the current user, read once
+/// and reused until cleared: one `Get-AppxPackage` per command instead of
+/// one per package. Cleared at the start of each command and after a removal.
+#[derive(Default)]
+pub struct AppxCache(std::sync::Mutex<Option<std::collections::HashSet<String>>>);
+
+impl AppxCache {
+    /// Whether `package` is installed, fetching the list on first use.
+    pub fn installed(
+        &self,
+        package: &str,
+        fetch: impl FnOnce() -> Result<std::collections::HashSet<String>, SysError>,
+    ) -> Result<bool, SysError> {
+        let mut g = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let names = match g.as_ref() {
+            Some(n) => n,
+            None => g.insert(fetch()?.into_iter().map(|n| n.to_lowercase()).collect()),
+        };
+        Ok(names.contains(&package.to_lowercase()))
+    }
+
+    pub fn clear(&self) {
+        *self.0.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+}
+
 pub trait System {
+    /// Drops per-command caches (the Appx list). Commands call this before
+    /// reading state, so each command sees the PC as it is now.
+    fn begin_command(&mut self) {}
     /// String SID (`S-1-5-21-…`) of the account this process runs as, whose
     /// HKCU hive and Appx packages per-user actions change. `None` if unknown.
     fn current_user_sid(&self) -> Option<String>;
