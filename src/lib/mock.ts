@@ -14,16 +14,40 @@ import type {
   TweakView,
   UndoResult,
   StartupEntry,
+  CleanupTarget,
 } from "./types";
+
+// URL switches for screenshots of the rarer states:
+//   ?mock&account   running as another admin (per-user tweaks locked)
+//   ?mock&journal   the undo record can't be read (changes paused)
+//   ?mock&failapply applyTweaks throws
+//   ?mock&restore=throttled|disabled|failed   restore point problems
+const flags = new URLSearchParams(typeof location === "undefined" ? "" : location.search);
 
 const overview: Overview = {
   build: 26100,
   isLaptop: false,
-  perUserAllowed: true,
-  accountMessage: null,
-  stats: { startupEnabled: 14, servicesRunning: 41, junkBytes: 6_657_199_308 },
-  journalError: null,
+  perUserAllowed: !flags.has("account"),
+  accountMessage: flags.has("account")
+    ? "You're running Featherweight with a different administrator account than the one signed in. Settings that only affect your account are turned off. Sign in as an administrator to use them."
+    : null,
+  // junkBytes is the sum of the scan below, as the real overview reports it.
+  stats: { startupEnabled: 5, servicesRunning: 41, junkBytes: 4_214_436_658 },
+  journalError: flags.has("journal") ? "The file journal.json is damaged (expected value at line 1 column 1)." : null,
 };
+
+/** Descriptions straight from tweaks/*.toml, so the explainer shows the real copy. */
+const tomls = import.meta.glob("../../tweaks/*.toml", { query: "?raw", import: "default", eager: true }) as Record<
+  string,
+  string
+>;
+const descriptions = new Map(
+  Object.values(tomls).flatMap((src) => {
+    const id = /^id = "([^"]+)"/m.exec(src)?.[1];
+    const d = /^description = "((?:[^"\\]|\\.)*)"/m.exec(src)?.[1];
+    return id && d ? [[id, d.replace(/\\"/g, '"')] as const] : [];
+  }),
+);
 
 const CDM = String.raw`HKCU\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager`;
 
@@ -39,7 +63,6 @@ function t(
   return {
     id,
     title,
-    description: "",
     section,
     level,
     irreversible: false,
@@ -51,6 +74,7 @@ function t(
     exclusiveWith: null,
     presets,
     ...extra,
+    description: descriptions.get(id) ?? extra.description ?? "",
   };
 }
 
@@ -139,7 +163,10 @@ const catalog = [
     [String.raw`HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile\SystemResponsiveness = 10 (DWORD)`]),
 ];
 
-const status = new Map<string, TweakStatus>(catalog.map((x) => [x.id, x.status]));
+// Running as another admin: the backend marks per-user tweaks not applicable.
+const status = new Map<string, TweakStatus>(
+  catalog.map((x) => [x.id, flags.has("account") && x.perUser ? { kind: "notApplicable", reason: "accountMismatch" } : x.status]),
+);
 const listeners = new Set<(p: Progress) => void>();
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -162,12 +189,26 @@ function undoOne(id: string, force: boolean): UndoResult {
   return { id, outcomes: [{ kind: was === "notApplied" ? "alreadyOriginal" : "restored" }] };
 }
 
+function scanTargets(): CleanupTarget[] {
+  return [
+    { id: "temp", label: "Temporary files", paths: ["%TEMP%"], bytes: 1_288_490_188, needsServiceStop: null },
+    { id: "wu-cache", label: "Windows Update cache", paths: ["SoftwareDistribution\\Download"], bytes: 2_254_857_830, needsServiceStop: "wuauserv" },
+    { id: "thumbnails", label: "Thumbnail cache", paths: ["Explorer\\thumbcache_*.db"], bytes: 146_800_640, needsServiceStop: null },
+    { id: "crash-dumps", label: "Crash dumps and error reports", paths: ["%LOCALAPPDATA%\\CrashDumps"], bytes: 524_288_000, needsServiceStop: null },
+    { id: "delivery-opt", label: "Delivery Optimization cache", paths: ["DeliveryOptimization\\Cache"], bytes: 0, needsServiceStop: null },
+  ];
+}
+
 export const mockApi: Backend = {
   getOverview: async () => overview,
   listTweaks: async () => views(),
   previewPreset: async (p) =>
     catalog.filter((x) => x.presets.includes(p) && x.level === "safe").map((x) => x.id),
   applyTweaks: async (ids) => {
+    if (flags.has("failapply")) {
+      await wait(400);
+      throw new Error("The Featherweight service stopped responding.");
+    }
     const report: ApplyReport = { results: [] };
     for (const [i, id] of ids.entries()) {
       const tw = catalog.find((x) => x.id === id);
@@ -215,17 +256,13 @@ export const mockApi: Backend = {
   },
   scanCleanup: async () => {
     await wait(700);
-    return [
-      { id: "temp", label: "Temporary files", paths: ["%TEMP%"], bytes: 1_288_490_188, needsServiceStop: null },
-      { id: "wu-cache", label: "Windows Update cache", paths: ["SoftwareDistribution\\Download"], bytes: 2_254_857_830, needsServiceStop: "wuauserv" },
-      { id: "thumbnails", label: "Thumbnail cache", paths: ["Explorer\\thumbcache_*.db"], bytes: 146_800_640, needsServiceStop: null },
-      { id: "crash-dumps", label: "Crash dumps and error reports", paths: ["%LOCALAPPDATA%\\CrashDumps"], bytes: 524_288_000, needsServiceStop: null },
-      { id: "delivery-opt", label: "Delivery Optimization cache", paths: ["DeliveryOptimization\\Cache"], bytes: 0, needsServiceStop: null },
-    ];
+    return scanTargets();
   },
   runCleanup: async (ids) => {
     await wait(900);
-    return { freedBytes: ids.length * 700_000_000, skippedFiles: 12 };
+    const bytes = scanTargets().filter((t) => ids.includes(t.id)).reduce((n, t) => n + t.bytes, 0);
+    // A few files are always in use and get skipped.
+    return { freedBytes: Math.round(bytes * 0.97), skippedFiles: 12 };
   },
   onApplyProgress: async (cb) => {
     listeners.add(cb);

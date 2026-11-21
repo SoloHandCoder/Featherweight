@@ -2,10 +2,10 @@
   // ResultSummary for anything that undid tweaks: undo groups (optionally
   // after apply groups), "Restore anyway" on Changed since rows and a Store
   // link on Reinstall manually rows. Pages call `show(...)` via bind:this.
-  import { ExternalLink } from "lucide-svelte";
+  import { ExternalLink } from "@lucide/svelte";
   import ResultSummary from "./ResultSummary.svelte";
   import { backend } from "../lib/backend";
-  import { app, message, refresh, startBusy, stopBusy } from "../lib/state.svelte";
+  import { app, changed, message, startBusy, stopBusy } from "../lib/state.svelte";
   import {
     combineGroups,
     groupUndoReport,
@@ -19,11 +19,9 @@
 
   interface Props {
     returnFocus?: HTMLElement | null;
-    /** Called with the result of each "Restore anyway". */
-    onforced?: (report: UndoReport) => void;
   }
 
-  let { returnFocus = null, onforced }: Props = $props();
+  let { returnFocus = null }: Props = $props();
 
   let open = $state(false);
   let applyGroups = $state<ResultGroup[]>([]);
@@ -42,12 +40,13 @@
   }
 
   async function restoreAnyway(id: string) {
+    if (app.busy) return;
+    let forced: UndoReport | null = null;
     if (!startBusy({ kind: "undo", label: "Restoring" })) return;
     forcing = id;
     try {
-      const forced = await backend.api.undoTweaks([id], true);
+      forced = await backend.api.undoTweaks([id], true);
       report = mergeUndoReport(report, forced);
-      onforced?.(forced);
     } catch (e) {
       report = mergeUndoReport(report, {
         results: [{ id, outcomes: [{ kind: "failed", message: `Couldn't restore: ${message(e)}` }] }],
@@ -56,7 +55,8 @@
       forcing = null;
       stopBusy();
     }
-    await refresh();
+    // Refreshes every open page: a section's switches and "changed since" notes.
+    await changed(forced);
   }
 </script>
 
@@ -74,7 +74,8 @@
       <button
         type="button"
         class="btn btn-ghost btn-sm"
-        disabled={!!app.busy}
+        aria-disabled={!!app.busy || undefined}
+        data-busy={forcing === id || undefined}
         aria-label="Restore anyway: {item.title}"
         onclick={() => restoreAnyway(id)}
       >

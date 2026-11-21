@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CircleCheck, TriangleAlert } from "lucide-svelte";
+  import { CircleCheck, TriangleAlert } from "@lucide/svelte";
   import ConfirmDialog from "../components/ConfirmDialog.svelte";
   import { backend } from "../lib/backend";
   import { app, message, startBusy, stopBusy, BACKEND_UNAVAILABLE } from "../lib/state.svelte";
@@ -52,7 +52,6 @@
       started = true;
       void scan();
     }
-    // Unavailable-state text comes from BACKEND_UNAVAILABLE.
   });
 
   function toggle(id: string) {
@@ -91,7 +90,12 @@
       <TriangleAlert size={16} strokeWidth={1.75} aria-hidden="true" />
       <p>{error}</p>
       {#if app.backendAvailable}
-        <button type="button" class="btn btn-ghost btn-sm" onclick={() => scan()} disabled={busy}>Retry</button>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          aria-disabled={busy || undefined}
+          onclick={() => !busy && scan()}
+        >Retry</button>
       {/if}
     </div>
   {/if}
@@ -128,7 +132,11 @@
           <input
             type="checkbox"
             checked={selected.has(t.id)}
-            disabled={busy || t.bytes === 0}
+            disabled={t.bytes === 0}
+            aria-disabled={busy || undefined}
+            onclick={(e) => {
+              if (busy) e.preventDefault();
+            }}
             onchange={() => toggle(t.id)}
           />
           <span class="text">
@@ -155,8 +163,11 @@
       type="button"
       class="btn btn-primary"
       bind:this={cleanButton}
-      disabled={!canClean}
-      onclick={() => (confirmOpen = true)}
+      aria-disabled={!canClean || undefined}
+      data-busy={running || undefined}
+      onclick={() => {
+        if (canClean) confirmOpen = true;
+      }}
     >
       {running ? "Cleaning" : `Clean ${formatBytes(total)}`}
     </button>
@@ -167,7 +178,7 @@
   open={confirmOpen}
   title="This can't be undone"
   message="These files will be deleted:"
-  items={chosen.map((t) => `${t.label}: ${formatBytes(t.bytes)}`)}
+  items={chosen.map((t) => ({ label: t.label, value: formatBytes(t.bytes) }))}
   confirmLabel="Clean"
   cautious
   returnFocus={cleanButton}
@@ -180,7 +191,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
-    max-width: 720px;
   }
 
   .intro {
@@ -311,27 +321,27 @@
     content: "";
     width: 9px;
     height: 5px;
-    border-left: 2px solid var(--on-accent);
-    border-bottom: 2px solid var(--on-accent);
+    border-left: 2px solid var(--on-control);
+    border-bottom: 2px solid var(--on-control);
     transform: translateY(-1px) rotate(-45deg);
     opacity: 0;
   }
 
+  input[type="checkbox"]:not(:disabled):not([aria-disabled="true"]):hover {
+    border-color: var(--muted);
+  }
+
   input[type="checkbox"]:checked {
-    background: var(--accent);
-    border-color: var(--accent);
+    background: var(--control-on);
+    border-color: var(--control-on);
   }
 
   input[type="checkbox"]:checked::after {
     opacity: 1;
   }
 
-  input[type="checkbox"]:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-
-  input[type="checkbox"]:disabled {
+  input[type="checkbox"]:disabled,
+  input[type="checkbox"][aria-disabled="true"] {
     cursor: not-allowed;
     opacity: 0.6;
   }

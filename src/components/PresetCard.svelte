@@ -1,7 +1,7 @@
 <script lang="ts">
   // One option of the "Pick a preset" radio group. Only the selected card is
   // in the tab order; the parent moves the selection with arrow keys.
-  import type { Zap } from "lucide-svelte";
+  import type { Zap } from "@lucide/svelte";
 
   interface Props {
     name: string;
@@ -26,7 +26,7 @@
   tabindex={selected ? 0 : -1}
   class="card"
   class:selected
-  {disabled}
+  aria-disabled={disabled || undefined}
   onclick={onselect}
   {onkeydown}
 >
@@ -56,18 +56,19 @@
       background-color var(--duration) var(--ease);
   }
 
-  .card:disabled {
+  .card[aria-disabled="true"] {
     cursor: not-allowed;
     opacity: 0.55;
   }
 
-  .card:not(:disabled):hover {
+  .card:not([aria-disabled="true"]):hover {
     border-color: var(--border-strong);
     background: var(--surface-3);
   }
 
   .card.selected {
-    border-color: var(--accent);
+    border-color: color-mix(in srgb, var(--control-on) 55%, transparent);
+    background: var(--surface-3);
   }
 
   .head {
@@ -83,7 +84,7 @@
   }
 
   .selected .head :global(svg) {
-    color: var(--accent);
+    color: var(--text);
   }
 
   .name {
@@ -101,7 +102,7 @@
   }
 
   .selected .dot {
-    border: 4px solid var(--accent);
+    border: 4px solid var(--control-on);
   }
 
   .desc {

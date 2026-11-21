@@ -13,10 +13,19 @@
   --muted: #8a90a0; /* 6.0:1 on --bg, 4.9:1 on --surface-3 */
   --on-accent: #0b0d12;
 
-  /* Accent. The gradient is reserved for .btn-primary and the logo. */
+  /*
+   * Accent. The gradient is reserved for .btn-primary and the logo; the
+   * flat accent marks keyboard focus and apply progress. Chrome (switches,
+   * checkboxes, the selected preset, nav, tabs) stays neutral.
+   */
   --accent: #38bdf8;
   --accent-2: #818cf8;
   --accent-gradient: linear-gradient(135deg, var(--accent), var(--accent-2));
+
+  /* "On" controls: a light fill with dark ink. */
+  --control-on: #d9dce3;
+  --control-on-hover: #f1f2f5;
+  --on-control: var(--bg);
 
   /* Levels */
   --safe-bg: #123524;

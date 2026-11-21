@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Activity, Gamepad2, House, RotateCcw, Sparkles, Trash2 } from "lucide-svelte";
+  import { Activity, Gamepad2, House, RotateCcw, Sparkles, Trash2 } from "@lucide/svelte";
   import Logo from "./Logo.svelte";
   import type { Page } from "../lib/state.svelte";
   import { BUSY_HINT } from "../lib/busy";
@@ -80,10 +80,9 @@
     <button
       type="button"
       class="item undo"
-      disabled={!onundoall || undoDisabled}
-      aria-disabled={busy || undefined}
+      aria-disabled={busy || !onundoall || undoDisabled || undefined}
       title={busy ? BUSY_HINT : undefined}
-      onclick={() => !busy && onundoall?.()}
+      onclick={() => !busy && !undoDisabled && onundoall?.()}
     >
       <RotateCcw size={16} strokeWidth={1.75} aria-hidden="true" />
       <span>Undo all</span>
@@ -152,17 +151,22 @@
     flex: none;
   }
 
+  /* Inside the item, so the ring doesn't crowd the sidebar edge. */
+  .item:focus-visible {
+    outline-offset: -2px;
+  }
+
   .item[aria-disabled="true"]:not([aria-current="page"]) {
     cursor: not-allowed;
     opacity: 0.55;
   }
 
-  .item:not(:disabled):not([aria-disabled="true"]):hover {
+  .item:not([aria-disabled="true"]):hover {
     background: var(--surface-2);
     color: var(--text);
   }
 
-  .item:not(:disabled):not([aria-disabled="true"]):active {
+  .item:not([aria-disabled="true"]):active {
     background: var(--surface-3);
   }
 
@@ -172,12 +176,7 @@
   }
 
   .item[aria-current="page"] :global(svg) {
-    color: var(--accent);
-  }
-
-  .item:disabled {
-    cursor: not-allowed;
-    opacity: 0.55;
+    color: var(--text);
   }
 
   .foot {

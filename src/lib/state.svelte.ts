@@ -5,7 +5,8 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { backend } from "./backend";
 import { beginBusy, endBusy, type Busy } from "./busy";
-import type { Overview, Preset, TweakView } from "./types";
+import { dialogClosed, dialogOpened, recordChange } from "./counters";
+import type { Overview, Preset, TweakView, UndoReport } from "./types";
 
 export type Page = "home" | "remove" | "background" | "gaming" | "cleanup";
 
@@ -36,6 +37,15 @@ export const app = $state({
    * `finally`. While set, the sidebar can't navigate or Undo all.
    */
   busy: null as Busy | null,
+  /**
+   * Bumped by `changed()` after every apply or undo, wherever it ran. An
+   * open section page resets its switches when this moves.
+   */
+  revision: 0,
+  /** Value name per tweak whose last undo found it changed by something else. */
+  changedSince: {} as Record<string, string>,
+  /** Open dialogs. The app shell is `inert` while this is above zero. */
+  dialogs: 0,
 });
 
 export type { Busy } from "./busy";
@@ -92,6 +102,24 @@ export async function refresh(): Promise<void> {
   } finally {
     app.loading = false;
   }
+}
+
+/**
+ * Call after an apply or undo finished (successfully or not): reloads,
+ * then notes the undo report's "changed since" values and bumps
+ * `app.revision`, so every open page shows the PC as it is now.
+ */
+export async function changed(undo: UndoReport | null = null): Promise<void> {
+  await refresh();
+  recordChange(app, undo);
+}
+
+export function openDialog(): void {
+  dialogOpened(app);
+}
+
+export function closeDialog(): void {
+  dialogClosed(app);
 }
 
 /** Ignored while a change is running. */

@@ -4,7 +4,8 @@
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import UndoSummary from "./UndoSummary.svelte";
   import { backend } from "../lib/backend";
-  import { app, message, refresh, startBusy, stopBusy } from "../lib/state.svelte";
+  import { app, changed, message, startBusy, stopBusy } from "../lib/state.svelte";
+  import type { UndoReport } from "../lib/types";
 
   let { returnFocus = null }: { returnFocus?: HTMLElement | null } = $props();
 
@@ -19,14 +20,17 @@
   async function run() {
     asking = false;
     if (!startBusy({ kind: "undo", label: "Putting everything back" })) return;
+    let report: UndoReport | null = null;
     try {
-      summary?.show(await backend.api.undoAll(false));
+      report = await backend.api.undoAll(false);
+      summary?.show(report);
     } catch (e) {
       summary?.show({ results: [{ id: "Undo all", outcomes: [{ kind: "failed", message: message(e) }] }] });
     } finally {
       stopBusy();
     }
-    await refresh();
+    // Resets an open section's switches and notes what was changed since.
+    await changed(report);
   }
 </script>
 

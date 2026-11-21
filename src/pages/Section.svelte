@@ -3,16 +3,24 @@
   // The switches show the wanted end state; "Apply N changes" applies the
   // ones switched on (through the safe apply flow) and undoes the ones
   // switched off. Used for Remove and Gaming; Background composes it.
-  import { LifeBuoy } from "lucide-svelte";
+  import { LifeBuoy } from "@lucide/svelte";
   import TweakRow from "../components/TweakRow.svelte";
   import ExplainerPanel from "../components/ExplainerPanel.svelte";
   import LevelPill from "../components/LevelPill.svelte";
   import ApplyDialogs from "../components/ApplyDialogs.svelte";
   import UndoSummary from "../components/UndoSummary.svelte";
   import { backend } from "../lib/backend";
-  import { app, message, refresh, startBusy, stopBusy } from "../lib/state.svelte";
+  import { untrack } from "svelte";
+  import { app, changed, message, refresh, startBusy, stopBusy } from "../lib/state.svelte";
   import { groupApplyReport, runApply, type ResultGroup } from "../lib/applyFlow";
-  import { defaultToggles, pendingChanges, setToggle, visibleTweaks, type Toggles } from "../lib/selection";
+  import {
+    defaultToggles,
+    pendingChanges,
+    switchToggle,
+    visibleTweaks,
+    type Displaced,
+    type Toggles,
+  } from "../lib/selection";
   import type { Progress, UndoReport } from "../lib/types";
 
   let { section }: { section: "remove" | "background" | "gaming" } = $props();
@@ -22,11 +30,11 @@
 
   /** Switches the user moved; everything else shows the PC's state. */
   let overrides = $state<Toggles>({});
+  /** What each exclusive switch turned off, so switching it back puts that back. */
+  let displaced: Displaced = {};
   let selectedId = $state<string | null>(null);
   /** Ids whose optional app removal should cover every account. */
   let allUsers = $state<string[]>([]);
-  /** Value name per tweak whose last undo found it changed by something else. */
-  let changedSince = $state<Record<string, string>>({});
 
   let phase = $state<"restore" | "apply" | "undo" | null>(null);
   let progress = $state<Progress | null>(null);
@@ -50,10 +58,23 @@
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
   function toggle(id: string, on: boolean) {
-    if (busy) return;
-    overrides = setToggle(visible, toggles, id, on);
+    if (busy || !canAct) return;
+    const next = switchToggle(visible, toggles, displaced, id, on);
+    overrides = next.toggles;
+    displaced = next.displaced;
     nothingChanged = false;
   }
+
+  // Any apply or undo, here or elsewhere (Undo all, Restore anyway in a
+  // summary), moves app.revision: the switches go back to showing the PC.
+  let seenRevision = untrack(() => app.revision);
+  $effect(() => {
+    const r = app.revision;
+    if (r === seenRevision) return;
+    seenRevision = r;
+    overrides = {};
+    displaced = {};
+  });
 
   function onRowKey(e: KeyboardEvent) {
     if (!list || !["ArrowUp", "ArrowDown", "Home", "End"].includes(e.key)) return;
@@ -69,25 +90,8 @@
     selectedId = rows[next]?.dataset.row ?? selectedId;
   }
 
-  /** Remembers which values something else changed since they were set. */
-  function noteChangedSince(report: UndoReport) {
-    const next = { ...changedSince };
-    for (const r of report.results) {
-      const o = r.outcomes.find((x) => x.kind === "changedSince");
-      if (o) next[r.id] = o.what;
-      else delete next[r.id];
-    }
-    changedSince = next;
-  }
-
-  /** `reset`: something ran, so the switches go back to showing the PC. */
-  async function finish(reset = true) {
-    if (reset) overrides = {};
-    await refresh();
-  }
-
   async function apply() {
-    if (!canAct || count === 0) return;
+    if (busy || !canAct || count === 0) return;
     const { apply: applyIds, undo: undoIds } = pending;
     if (!startBusy({ kind: "apply", label: `Applying ${plural(applyIds.length + undoIds.length, "change", "changes")}` }))
       return;
@@ -102,7 +106,12 @@
     // afterwards would overwrite the new one. They still wait for the
     // restore point and confirmation steps.
     // A holder, so TypeScript doesn't narrow it to null across the closure.
-    const done: { undo: UndoReport | null; step: "apply" | "undo" } = { undo: null, step: "apply" };
+    // `sent`: the ids runApply actually asked to apply (skipped irreversible ones left out).
+    const done: { undo: UndoReport | null; step: "apply" | "undo"; sent: string[] } = {
+      undo: null,
+      step: "apply",
+      sent: [],
+    };
     const runUndo = async () => {
       if (undoIds.length === 0 || done.undo) return;
       phase = "undo";
@@ -110,7 +119,6 @@
       done.step = "undo";
       done.undo = await api.undoTweaks(undoIds, false);
       done.step = "apply";
-      noteChangedSince(done.undo);
     };
     try {
       let applyGroups: ResultGroup[] = [];
@@ -136,6 +144,7 @@
               return dialogs!.askIrreversible(ids);
             },
             applyTweaks: async (ids, au) => {
+              done.sent = ids;
               await runUndo();
               phase = "apply";
               progress = { done: 0, total: ids.length, current: "" };
@@ -160,9 +169,12 @@
         // The undos already ran: say so, next to what failed to apply.
         const detail = message(e);
         const title = (id: string) => app.tweaks.find((t) => t.id === id)?.title ?? id;
-        summary?.show(done.undo, [
-          { label: "Failed to apply", tone: "bad", items: applyIds.map((id) => ({ title: title(id), detail })) },
-        ]);
+        summary?.show(
+          done.undo,
+          done.sent.length > 0
+            ? [{ label: "Failed to apply", tone: "bad", items: done.sent.map((id) => ({ title: title(id), detail })) }]
+            : [],
+        );
       } else {
         error = `Couldn't apply: ${message(e)}`;
       }
@@ -172,17 +184,18 @@
       phase = null;
       progress = null;
     }
-    await finish(ran);
+    if (ran) await changed(done.undo);
+    else await refresh();
   }
 
   async function undoOne(id: string, force: boolean) {
-    if (!canAct) return;
+    if (busy || !canAct) return;
     if (!startBusy({ kind: "undo", label: force ? "Restoring" : "Undoing" })) return;
     error = null;
     phase = "undo";
+    let report: UndoReport | null = null;
     try {
-      const report = await backend.api.undoTweaks([id], force);
-      noteChangedSince(report);
+      report = await backend.api.undoTweaks([id], force);
       summary?.show(report);
     } catch (e) {
       error = `Couldn't undo: ${message(e)}`;
@@ -190,7 +203,7 @@
       stopBusy();
       phase = null;
     }
-    await finish();
+    await changed(report);
   }
 </script>
 
@@ -207,7 +220,15 @@
     </header>
 
     {#if visible.length === 0}
-      <p class="empty muted">{app.overview ? "Nothing in this section applies to this PC." : "Loading"}</p>
+      <p class="empty muted">
+        {#if app.overview}
+          Nothing in this section applies to this PC.
+        {:else if !app.backendAvailable}
+          Open the desktop app to see what this section changes.
+        {:else}
+          Loading
+        {/if}
+      </p>
     {:else}
       <ul bind:this={list} aria-label="Changes">
         {#each visible as t (t.id)}
@@ -260,8 +281,8 @@
         bind:this={applyButton}
         type="button"
         class="btn btn-primary num"
-        disabled={!busy && (!canAct || count === 0)}
-        aria-disabled={busy || undefined}
+        aria-disabled={busy || !canAct || count === 0 || undefined}
+        data-busy={busy || undefined}
         onclick={apply}
       >
         {busy ? (app.busy?.label ?? "Working") : count === 0 ? "No changes to apply" : `Apply ${plural(count, "change", "changes")}`}
@@ -279,7 +300,7 @@
       if (!id) return;
       allUsers = on ? [...allUsers, id] : allUsers.filter((x) => x !== id);
     }}
-    changedSince={selected ? (changedSince[selected.id] ?? null) : null}
+    changedSince={selected ? (app.changedSince[selected.id] ?? null) : null}
     onundo={() => selected && undoOne(selected.id, false)}
     onrestoreanyway={() => selected && undoOne(selected.id, true)}
     disabled={busy || !canAct}
@@ -289,7 +310,7 @@
 <p class="sr-only" aria-live="polite">{selected ? `${selected.title}: details shown` : ""}</p>
 
 <ApplyDialogs bind:this={dialogs} tweaks={app.tweaks} returnFocus={applyButton} />
-<UndoSummary bind:this={summary} returnFocus={applyButton} onforced={noteChangedSince} />
+<UndoSummary bind:this={summary} returnFocus={applyButton} />
 
 <style>
   .section {
@@ -393,11 +414,6 @@
 
   .error {
     color: var(--adv);
-  }
-
-  .btn-primary[aria-disabled="true"] {
-    cursor: progress;
-    opacity: 0.7;
   }
 
   .section > :global(.explainer) {

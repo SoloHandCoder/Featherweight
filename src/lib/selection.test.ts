@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultToggles, pendingChanges, setToggle, visibleTweaks } from "./selection";
+import { defaultToggles, pendingChanges, setToggle, switchToggle, visibleTweaks } from "./selection";
 import type { Level, TweakStatus, TweakView } from "./types";
 
 function tweak(
@@ -89,6 +89,55 @@ describe("setToggle", () => {
     const before = { hp: true, up: false, x: false };
     setToggle(tweaks, before, "up", true);
     expect(before).toEqual({ hp: true, up: false, x: false });
+  });
+});
+
+describe("switchToggle", () => {
+  const tweaks = [
+    tweak("hp", "applied", "safe", "up"),
+    tweak("up", "notApplied", "advanced", "hp"),
+    tweak("x"),
+  ];
+  const start = { hp: true, up: false, x: false };
+
+  it("switching_back_off_restores_the_displaced_partner", () => {
+    const a = switchToggle(tweaks, start, {}, "up", true);
+    expect(a.toggles).toEqual({ hp: false, up: true, x: false });
+    expect(a.displaced).toEqual({ up: true });
+    const b = switchToggle(tweaks, a.toggles, a.displaced, "up", false);
+    expect(b.toggles).toEqual(start);
+    expect(b.displaced).toEqual({});
+    expect(pendingChanges(tweaks, b.toggles)).toEqual({ apply: [], undo: [] });
+  });
+
+  it("restores_a_partner_that_was_off_as_off", () => {
+    const off = { hp: false, up: false, x: false };
+    const a = switchToggle(tweaks, off, {}, "up", true);
+    const b = switchToggle(tweaks, a.toggles, a.displaced, "up", false);
+    expect(b.toggles).toEqual(off);
+  });
+
+  it("touching_the_partner_forgets_the_memory", () => {
+    const a = switchToggle(tweaks, start, {}, "up", true);
+    // Turning hp back on by hand: up no longer owes hp anything, and hp
+    // now remembers that it displaced an up that was on.
+    const b = switchToggle(tweaks, a.toggles, a.displaced, "hp", true);
+    expect(b.toggles).toEqual({ hp: true, up: false, x: false });
+    expect(b.displaced).toEqual({ hp: true });
+    const c = switchToggle(tweaks, b.toggles, b.displaced, "hp", false);
+    expect(c.toggles).toEqual({ hp: false, up: true, x: false });
+  });
+
+  it("keeps_the_first_remembered_state_on_repeat", () => {
+    const a = switchToggle(tweaks, start, {}, "up", true);
+    const again = switchToggle(tweaks, a.toggles, a.displaced, "up", true);
+    expect(again.displaced).toEqual({ up: true });
+  });
+
+  it("tweaks_without_a_partner_leave_memory_alone", () => {
+    const a = switchToggle(tweaks, start, { up: true }, "x", true);
+    expect(a.displaced).toEqual({ up: true });
+    expect(a.toggles.x).toBe(true);
   });
 });
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   // What the selected tweak does, exactly: its description, one line per
   // changed value, its status, and the per-tweak controls.
-  import { CircleAlert, RotateCcw, Undo2 } from "lucide-svelte";
+  import { CircleAlert, RotateCcw, Undo2 } from "@lucide/svelte";
   import type { TweakView } from "../lib/types";
 
   interface Props {
@@ -85,7 +85,10 @@
         <input
           type="checkbox"
           checked={allUsers}
-          {disabled}
+          aria-disabled={disabled || undefined}
+          onclick={(e) => {
+            if (disabled) e.preventDefault();
+          }}
           onchange={(e) => onallusers(e.currentTarget.checked)}
         />
         <span>Also remove for all users</span>
@@ -109,12 +112,22 @@
     {#if on || changedSince}
       <div class="actions">
         {#if changedSince}
-          <button type="button" class="btn btn-ghost btn-sm" {disabled} onclick={onrestoreanyway}>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            aria-disabled={disabled || undefined}
+            onclick={() => !disabled && onrestoreanyway()}
+          >
             <RotateCcw size={14} strokeWidth={1.75} aria-hidden="true" />
             Restore anyway
           </button>
         {:else}
-          <button type="button" class="btn btn-ghost btn-sm" {disabled} onclick={onundo}>
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm"
+            aria-disabled={disabled || undefined}
+            onclick={() => !disabled && onundo()}
+          >
             <Undo2 size={14} strokeWidth={1.75} aria-hidden="true" />
             Undo this one
           </button>
@@ -225,11 +238,16 @@
     cursor: pointer;
   }
 
+  .check:has(input[aria-disabled="true"]) {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+
   .check input {
     width: 16px;
     height: 16px;
     margin: 0;
-    accent-color: var(--accent);
+    accent-color: var(--control-on);
   }
 
   .changed {

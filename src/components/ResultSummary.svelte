@@ -2,7 +2,7 @@
   // What happened after an apply (or undo): outcomes in labelled groups.
   // `itemAction` lets a caller add a per-item control, e.g. "Restore anyway".
   import type { Snippet } from "svelte";
-  import { CircleAlert, CircleCheck, CircleMinus } from "lucide-svelte";
+  import { CircleAlert, CircleCheck, CircleMinus } from "@lucide/svelte";
   import Modal from "./Modal.svelte";
   import type { ResultGroup, ResultItem } from "../lib/applyFlow";
 
@@ -44,7 +44,7 @@
         <h3>
           <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
           <span>{group.label}</span>
-          <span class="count num">{group.items.length}</span>
+          {#if !group.hideCount}<span class="count num">{group.items.length}</span>{/if}
         </h3>
         <ul>
           {#each group.items as item, i (i)}

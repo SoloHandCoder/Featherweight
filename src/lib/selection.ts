@@ -32,12 +32,46 @@ export function pendingChanges(tweaks: TweakView[], toggled: Toggles): { apply: 
   return { apply, undo };
 }
 
-/** Sets one switch; switching one on switches off its `exclusiveWith` partner. */
-export function setToggle(tweaks: TweakView[], toggled: Toggles, id: string, on: boolean): Toggles {
+/**
+ * What an exclusive switch displaced: switch id -> the partner's wanted
+ * state just before that switch turned it off.
+ */
+export type Displaced = Record<string, boolean>;
+
+/**
+ * Sets one switch. Switching one on switches off its `exclusiveWith`
+ * partner and remembers what the partner was; switching it back off
+ * (before applying) puts the partner back. Touching the partner directly
+ * forgets the memory.
+ */
+export function switchToggle(
+  tweaks: TweakView[],
+  toggled: Toggles,
+  displaced: Displaced,
+  id: string,
+  on: boolean,
+): { toggles: Toggles; displaced: Displaced } {
   const next = { ...toggled, [id]: on };
-  const partner = on ? tweaks.find((t) => t.id === id)?.exclusiveWith : null;
-  if (partner && partner in next) next[partner] = false;
-  return next;
+  const memo = { ...displaced };
+  const partner = tweaks.find((t) => t.id === id)?.exclusiveWith ?? null;
+  // The user set `id` by hand, so whatever `partner` displaced in it is moot.
+  if (partner) delete memo[partner];
+  if (partner && partner in next) {
+    if (on) {
+      if (!(id in memo)) memo[id] = toggled[partner];
+      next[partner] = false;
+    } else if (id in memo) {
+      next[partner] = memo[id];
+      delete memo[id];
+    }
+  }
+  if (!on) delete memo[id];
+  return { toggles: next, displaced: memo };
+}
+
+/** `switchToggle` without the memory: switching one on switches off its partner. */
+export function setToggle(tweaks: TweakView[], toggled: Toggles, id: string, on: boolean): Toggles {
+  return switchToggle(tweaks, toggled, {}, id, on).toggles;
 }
 
 /** The section's tweaks that can run on this PC, in catalog order. */

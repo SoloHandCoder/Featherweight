@@ -34,9 +34,9 @@
     aria-checked={on}
     aria-label={tweak.title}
     class="switch"
-    {disabled}
+    aria-disabled={disabled || undefined}
     onclick={() => {
-      ontoggle(!on);
+      if (!disabled) ontoggle(!on);
       onselect();
     }}
   ><span class="knob"></span></button>
@@ -93,8 +93,13 @@
     cursor: pointer;
   }
 
+  /* Keyboard focus outlines the whole row, not just the text button. */
   .pick:focus-visible {
-    outline-offset: -2px;
+    outline: none;
+  }
+
+  li:has(.pick:focus-visible) {
+    box-shadow: inset 0 0 0 2px var(--accent);
   }
 
   .title {
@@ -107,46 +112,6 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--accent);
-  }
-
-  .switch {
-    position: relative;
-    flex: none;
-    width: 32px;
-    height: 18px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-pill);
-    background: var(--border-strong);
-    cursor: pointer;
-    transition: background-color var(--duration) var(--ease);
-  }
-
-  .knob {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--muted);
-    transition:
-      transform var(--duration) var(--ease),
-      background-color var(--duration) var(--ease);
-  }
-
-  .switch[aria-checked="true"] {
-    background: var(--accent);
-  }
-
-  .switch[aria-checked="true"] .knob {
-    transform: translateX(14px);
-    background: var(--on-accent);
-  }
-
-  .switch:disabled {
-    cursor: not-allowed;
-    opacity: 0.55;
+    background: var(--text);
   }
 </style>

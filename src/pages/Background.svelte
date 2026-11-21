@@ -1,7 +1,7 @@
 <script lang="ts">
   // Two tabs: the services and telemetry tweaks (the shared Section page) and
   // the apps that start with Windows. Startup switches apply immediately.
-  import { TriangleAlert } from "lucide-svelte";
+  import { TriangleAlert } from "@lucide/svelte";
   import Section from "./Section.svelte";
   import ApplyDialogs from "../components/ApplyDialogs.svelte";
   import { backend } from "../lib/backend";
@@ -153,11 +153,12 @@
           <button
             type="button"
             class="btn btn-ghost btn-sm"
+            aria-disabled={busy || loading || undefined}
             onclick={() => {
+              if (busy || loading) return;
               toggleError = null;
               void load();
             }}
-            disabled={busy || loading}
           >Retry</button>
         {/if}
       </div>
@@ -252,7 +253,7 @@
 
   [role="tab"][aria-selected="true"] {
     color: var(--text);
-    border-bottom-color: var(--accent);
+    border-bottom-color: var(--text);
     font-weight: var(--weight-medium);
   }
 
@@ -260,7 +261,6 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
-    max-width: 720px;
   }
 
   .startup[hidden] {
@@ -378,45 +378,5 @@
     width: 32px;
     height: 18px;
     border-radius: var(--radius-pill);
-  }
-
-  .switch {
-    position: relative;
-    flex: none;
-    width: 32px;
-    height: 18px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-pill);
-    background: var(--border-strong);
-    cursor: pointer;
-    transition: background-color var(--duration) var(--ease);
-  }
-
-  .knob {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--muted);
-    transition:
-      transform var(--duration) var(--ease),
-      background-color var(--duration) var(--ease);
-  }
-
-  .switch[aria-checked="true"] {
-    background: var(--accent);
-  }
-
-  .switch[aria-checked="true"] .knob {
-    transform: translateX(14px);
-    background: var(--on-accent);
-  }
-
-  .switch[aria-disabled="true"] {
-    cursor: not-allowed;
-    opacity: 0.55;
   }
 </style>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { TriangleAlert } from "lucide-svelte";
+  import { TriangleAlert } from "@lucide/svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import AccountBanner from "./components/AccountBanner.svelte";
   import Home from "./pages/Home.svelte";
@@ -25,7 +25,7 @@
   });
 </script>
 
-<div class="shell">
+<div class="shell" inert={app.dialogs > 0}>
   <Sidebar
     page={app.page}
     overview={app.overview}
@@ -47,7 +47,12 @@
             <TriangleAlert size={16} strokeWidth={1.75} aria-hidden="true" />
             <p>{app.error}</p>
             {#if app.backendAvailable}
-              <button type="button" class="btn btn-ghost btn-sm" onclick={refresh} disabled={app.loading}>
+              <button
+                type="button"
+                class="btn btn-ghost btn-sm"
+                aria-disabled={app.loading || undefined}
+                onclick={() => !app.loading && refresh()}
+              >
                 {app.loading ? "Retrying" : "Retry"}
               </button>
             {/if}
@@ -132,7 +137,7 @@
     border-color: color-mix(in srgb, var(--adv) 35%, transparent);
   }
 
-  .notice .btn-ghost:not(:disabled):hover {
+  .notice .btn-ghost:not([aria-disabled="true"]):hover {
     background: color-mix(in srgb, var(--adv) 12%, transparent);
   }
 </style>

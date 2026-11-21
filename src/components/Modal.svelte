@@ -1,7 +1,10 @@
 <script lang="ts">
   // Shared modal shell for ConfirmDialog and ResultSummary: role="dialog",
   // aria-modal, focus trap, Esc, and focus returned to the trigger on close.
-  import type { Snippet } from "svelte";
+  // The dialog is moved to <body> and counted in `app.dialogs`, so App can
+  // make everything behind it `inert`.
+  import { tick, untrack, type Snippet } from "svelte";
+  import { closeDialog, openDialog } from "../lib/state.svelte";
 
   interface Props {
     open: boolean;
@@ -28,18 +31,30 @@
     return panel ? Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)) : [];
   }
 
+  /** Moves the backdrop to <body>, outside the shell that goes inert. */
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
+
   $effect(() => {
     if (!open || !panel) return;
     const el = panel;
     const previous = document.activeElement as HTMLElement | null;
+    // untrack: the count is read to bump it, and must not re-run this effect.
+    untrack(openDialog);
     const first = el.querySelector<HTMLElement>("[data-autofocus]") ?? focusables()[0] ?? el;
     first.focus();
     return () => {
-      // Leave focus alone if another dialog has already taken it.
-      const active = document.activeElement;
-      if (active && active !== document.body && !el.contains(active)) return;
       const target = returnFocus ?? previous;
-      if (target && target.isConnected) target.focus();
+      untrack(closeDialog);
+      // The shell drops `inert` on the next update; focus the trigger after it.
+      void tick().then(() => {
+        // Leave focus alone if another dialog has already taken it.
+        const active = document.activeElement;
+        if (active && active !== document.body && !el.contains(active)) return;
+        if (target && target.isConnected) target.focus();
+      });
     };
   });
 
@@ -69,7 +84,7 @@
 </script>
 
 {#if open}
-  <div class="backdrop">
+  <div class="backdrop" use:portal>
     <div
       bind:this={panel}
       class="panel"

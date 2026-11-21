@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { UserRound } from "lucide-svelte";
+  import { UserRound } from "@lucide/svelte";
 
   /** `overview.accountMessage`; nothing renders when it is null. */
   let { message }: { message: string | null } = $props();
