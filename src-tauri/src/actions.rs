@@ -140,6 +140,21 @@ fn hive_name(h: Hive) -> &'static str {
     }
 }
 
+pub const HIGH_PERFORMANCE_GUID: &str = "8c5e7fda-e8bf-4a96-9a85-cf2dd2b47a5c";
+pub const ULTIMATE_PERFORMANCE_GUID: &str = "e9a42b02-d5df-448d-aa00-03f14749eb61";
+
+/// Display name of a built-in power scheme GUID.
+fn scheme_name(guid: &str) -> Option<&'static str> {
+    let g = guid.to_lowercase();
+    if g == HIGH_PERFORMANCE_GUID {
+        Some("High Performance")
+    } else if g == ULTIMATE_PERFORMANCE_GUID {
+        Some("Ultimate Performance")
+    } else {
+        None
+    }
+}
+
 pub fn describe(a: &ActionDef) -> String {
     match a {
         ActionDef::Registry { hive, path, name, value } => {
@@ -172,7 +187,13 @@ pub fn describe(a: &ActionDef) -> String {
             AllUsers::Always => format!("Remove app \"{package}\" (all users)"),
             AllUsers::Optional => format!("Remove app \"{package}\""),
         },
-        ActionDef::PowerPlan { .. } => "Power plan → High Performance".to_string(),
+        ActionDef::PowerPlan { scheme_guid, duplicate_from } => {
+            match (scheme_name(scheme_guid), duplicate_from.as_deref().and_then(scheme_name)) {
+                (Some(n), _) => format!("Power plan → {n}"),
+                (None, Some(n)) => format!("Power plan → {n} (copy {scheme_guid})"),
+                (None, None) => format!("Power plan → {scheme_guid}"),
+            }
+        }
         ActionDef::PowerShell { apply, .. } => format!("PowerShell: {apply}"),
     }
 }
@@ -272,6 +293,33 @@ mod tests {
         assert_eq!(
             describe(&appx(AllUsers::Always)),
             "Remove app \"king.com.CandyCrushSaga\" (all users)"
+        );
+    }
+
+    #[test]
+    fn describe_power_plan_names_the_scheme() {
+        let plan = |g: &str, d: Option<&str>| ActionDef::PowerPlan {
+            scheme_guid: g.into(),
+            duplicate_from: d.map(Into::into),
+        };
+        assert_eq!(
+            describe(&plan("8C5E7FDA-E8BF-4A96-9A85-CF2DD2B47A5C", None)),
+            "Power plan → High Performance"
+        );
+        assert_eq!(
+            describe(&plan("e9a42b02-d5df-448d-aa00-03f14749eb61", None)),
+            "Power plan → Ultimate Performance"
+        );
+        assert_eq!(
+            describe(&plan(
+                "11111111-2222-3333-4444-555555555555",
+                Some("e9a42b02-d5df-448d-aa00-03f14749eb61")
+            )),
+            "Power plan → Ultimate Performance (copy 11111111-2222-3333-4444-555555555555)"
+        );
+        assert_eq!(
+            describe(&plan("11111111-2222-3333-4444-555555555555", None)),
+            "Power plan → 11111111-2222-3333-4444-555555555555"
         );
     }
 

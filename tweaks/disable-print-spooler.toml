@@ -1,0 +1,10 @@
+id = "disable-print-spooler"
+title = "Turn off printing"
+description = "Turns off the Print Spooler service, so this PC can't print, including to PDF. Only use this if you never print."
+section = "background"
+level = "advanced"
+
+[[actions]]
+type = "service"
+name = "Spooler"
+start = "disabled"

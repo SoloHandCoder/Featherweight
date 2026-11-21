@@ -1,0 +1,22 @@
+id = "disable-copilot"
+title = "Turn off Copilot in Windows"
+description = "Turns off the built-in Copilot sidebar and hides its taskbar button. The newer stand-alone Copilot app is not removed."
+section = "remove"
+level = "safe"
+presets = ["everyday", "gaming"]
+
+# Group Policy "Turn off Windows Copilot" (User Configuration).
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Policies\Microsoft\Windows\WindowsCopilot'
+name = "TurnOffWindowsCopilot"
+value = { dword = 1 }
+
+# Settings > Personalization > Taskbar > Copilot.
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+name = "ShowCopilotButton"
+value = { dword = 0 }

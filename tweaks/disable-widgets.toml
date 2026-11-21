@@ -1,0 +1,22 @@
+id = "disable-widgets"
+title = "Turn off Widgets and News"
+description = "Removes the Widgets and news feed from the taskbar. Nothing else on the taskbar changes."
+section = "remove"
+level = "safe"
+presets = ["everyday", "gaming"]
+
+# Windows 11: Group Policy "Allow widgets".
+[[actions]]
+type = "registry"
+hive = "hklm"
+path = 'SOFTWARE\Policies\Microsoft\Dsh'
+name = "AllowNewsAndInterests"
+value = { dword = 0 }
+
+# Windows 10: Group Policy "Enable news and interests on the taskbar".
+[[actions]]
+type = "registry"
+hive = "hklm"
+path = 'SOFTWARE\Policies\Microsoft\Windows\Windows Feeds'
+name = "EnableFeeds"
+value = { dword = 0 }

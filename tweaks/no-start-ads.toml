@@ -1,0 +1,60 @@
+id = "no-start-ads"
+title = "No ads or suggestions in Start and Settings"
+description = "Hides promoted apps, tips and suggestions in the Start menu, in Settings and in pop-up notifications. Your own apps and recent files stay."
+section = "remove"
+level = "safe"
+presets = ["everyday", "gaming"]
+
+# Windows 10: "Show suggestions occasionally in Start".
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+name = "SystemPaneSuggestionsEnabled"
+value = { dword = 0 }
+
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+name = "SubscribedContent-338388Enabled"
+value = { dword = 0 }
+
+# "Get tips and suggestions when using Windows" (notifications).
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+name = "SubscribedContent-338389Enabled"
+value = { dword = 0 }
+
+# "Show me suggested content in the Settings app" (three values).
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+name = "SubscribedContent-338393Enabled"
+value = { dword = 0 }
+
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+name = "SubscribedContent-353694Enabled"
+value = { dword = 0 }
+
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+name = "SubscribedContent-353696Enabled"
+value = { dword = 0 }
+
+# Windows 11: Settings > Personalization > Start > "Show recommendations for
+# tips, shortcuts, new apps, and more". Ignored on Windows 10.
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+name = "Start_IrisRecommendations"
+value = { dword = 0 }

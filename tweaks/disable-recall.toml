@@ -1,0 +1,23 @@
+id = "disable-recall"
+title = "Turn off Recall"
+description = "Stops Windows from taking snapshots of your screen to search later. Only applies to PCs that have Recall."
+section = "remove"
+level = "safe"
+presets = ["everyday", "gaming"]
+min_build = 26100
+
+# Group Policy "Turn off saving snapshots for Windows" (Policy CSP
+# WindowsAI/DisableAIDataAnalysis), set for both the device and the user.
+[[actions]]
+type = "registry"
+hive = "hklm"
+path = 'SOFTWARE\Policies\Microsoft\Windows\WindowsAI'
+name = "DisableAIDataAnalysis"
+value = { dword = 1 }
+
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Policies\Microsoft\Windows\WindowsAI'
+name = "DisableAIDataAnalysis"
+value = { dword = 1 }

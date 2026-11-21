@@ -1,0 +1,84 @@
+id = "remove-junk-apps"
+title = "Remove preinstalled junk apps"
+description = "Removes games and apps that come preinstalled, like Candy Crush, Solitaire, Clipchamp and News, for every account on this PC. You can reinstall most of them from the Microsoft Store."
+section = "remove"
+level = "safe"
+presets = ["everyday", "gaming"]
+irreversible = true
+
+# Deliberately NOT removed: Microsoft.GetHelp (Windows 11 troubleshooters open
+# it) and Microsoft.MixedReality.Portal (Windows Mixed Reality headsets need it).
+
+[[actions]]
+type = "appx"
+package = "king.com.CandyCrushSaga"
+all_users = "always"
+reinstall = "ms-windows-store://pdp/?ProductId=9NBLGGH18846"
+
+[[actions]]
+type = "appx"
+package = "king.com.CandyCrushSodaSaga"
+all_users = "always"
+
+[[actions]]
+type = "appx"
+package = "king.com.CandyCrushFriends"
+all_users = "always"
+
+[[actions]]
+type = "appx"
+package = "Microsoft.MicrosoftSolitaireCollection"
+all_users = "always"
+reinstall = "ms-windows-store://pdp/?ProductId=9WZDNCRFHWD2"
+
+[[actions]]
+type = "appx"
+package = "Clipchamp.Clipchamp"
+all_users = "always"
+reinstall = "ms-windows-store://pdp/?ProductId=9P1J8S7CCWWT"
+
+[[actions]]
+type = "appx"
+package = "Microsoft.BingNews"
+all_users = "always"
+reinstall = "ms-windows-store://pdp/?ProductId=9WZDNCRFHVFW"
+
+[[actions]]
+type = "appx"
+package = "Microsoft.BingWeather"
+all_users = "always"
+reinstall = "ms-windows-store://pdp/?ProductId=9WZDNCRFJ3Q2"
+
+[[actions]]
+type = "appx"
+package = "Microsoft.Getstarted"
+all_users = "always"
+
+[[actions]]
+type = "appx"
+package = "Microsoft.WindowsFeedbackHub"
+all_users = "always"
+reinstall = "ms-windows-store://pdp/?ProductId=9NBLGGH4R32N"
+
+[[actions]]
+type = "appx"
+package = "Microsoft.Todos"
+all_users = "always"
+reinstall = "ms-windows-store://pdp/?ProductId=9NBLGGH5R558"
+
+[[actions]]
+type = "appx"
+package = "Microsoft.People"
+all_users = "always"
+
+[[actions]]
+type = "appx"
+package = "Microsoft.WindowsMaps"
+all_users = "always"
+reinstall = "ms-windows-store://pdp/?ProductId=9WZDNCRDTBVB"
+
+[[actions]]
+type = "appx"
+package = "Microsoft.Microsoft3DViewer"
+all_users = "always"
+reinstall = "ms-windows-store://pdp/?ProductId=9NBLGGH42THS"

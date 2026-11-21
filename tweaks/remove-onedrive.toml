@@ -1,0 +1,72 @@
+id = "remove-onedrive"
+title = "Uninstall OneDrive"
+description = "Uninstalls OneDrive, so it stops syncing and starting with Windows; files already on this PC stay. Undo reinstalls OneDrive, and you sign in to it again afterwards."
+section = "remove"
+level = "advanced"
+irreversible = true
+# Script-only tweak: it acts on the signed-in account's OneDrive, which the
+# action list can't show, so it is off when the elevated account differs.
+per_user = true
+
+# OneDrive is a Win32 app, not a Store package. Windows ships its installer
+# at System32\OneDriveSetup.exe (Windows 11, and Windows 10 32-bit) or
+# SysWOW64\OneDriveSetup.exe (Windows 10 64-bit). `/uninstall` removes the
+# current user's OneDrive, `/uninstall /allusers` a per-machine install in
+# Program Files; no arguments installs it again. Only those protected system
+# paths are executed - never a path read from the (user-writable) registry.
+#
+# Setup is started with ShellExecute (no inherited stdout/stderr pipes) and
+# only setup itself is waited for: OneDrive.exe, which setup may start,
+# keeps running and must not hold this script open.
+#
+# check prints 1 when neither a per-user nor a per-machine OneDrive.exe
+# exists - exactly the two installs apply removes.
+[[actions]]
+type = "powershell"
+check = '''
+$exe = @(Join-Path $env:LOCALAPPDATA 'Microsoft\OneDrive\OneDrive.exe')
+foreach ($pf in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
+  if ($pf) { $exe += Join-Path $pf 'Microsoft OneDrive\OneDrive.exe' }
+}
+if (@($exe | Where-Object { Test-Path -LiteralPath $_ }).Count -eq 0) { '1' } else { '0' }
+'''
+apply = '''
+$ErrorActionPreference = 'Stop'
+$setup = @(
+  (Join-Path $env:SystemRoot 'System32\OneDriveSetup.exe'),
+  (Join-Path $env:SystemRoot 'SysWOW64\OneDriveSetup.exe')
+) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $setup) { throw 'OneDriveSetup.exe was not found in the Windows folder.' }
+function Invoke-Setup([string]$arguments) {
+  $si = New-Object System.Diagnostics.ProcessStartInfo
+  $si.FileName = $setup
+  $si.Arguments = $arguments
+  $si.UseShellExecute = $true
+  $si.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+  $p = [System.Diagnostics.Process]::Start($si)
+  if (-not $p.WaitForExit(100000)) { throw 'OneDrive setup is still running. Check again in a minute.' }
+}
+$perMachine = $false
+foreach ($pf in @($env:ProgramFiles, ${env:ProgramFiles(x86)})) {
+  if ($pf -and (Test-Path -LiteralPath (Join-Path $pf 'Microsoft OneDrive\OneDrive.exe'))) { $perMachine = $true }
+}
+Stop-Process -Name OneDrive -Force -ErrorAction SilentlyContinue
+if ($perMachine) { Invoke-Setup '/uninstall /allusers' }
+if (Test-Path -LiteralPath (Join-Path $env:LOCALAPPDATA 'Microsoft\OneDrive\OneDrive.exe')) {
+  Invoke-Setup '/uninstall'
+}
+'''
+undo = '''
+$ErrorActionPreference = 'Stop'
+$setup = @(
+  (Join-Path $env:SystemRoot 'System32\OneDriveSetup.exe'),
+  (Join-Path $env:SystemRoot 'SysWOW64\OneDriveSetup.exe')
+) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $setup) { throw 'OneDriveSetup.exe was not found in the Windows folder.' }
+$si = New-Object System.Diagnostics.ProcessStartInfo
+$si.FileName = $setup
+$si.UseShellExecute = $true
+$si.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+$p = [System.Diagnostics.Process]::Start($si)
+if (-not $p.WaitForExit(100000)) { throw 'OneDrive setup is still running. Check again in a minute.' }
+'''

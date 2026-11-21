@@ -1,0 +1,24 @@
+id = "no-bing-in-start"
+title = "No Bing web results in Start search"
+description = "Start menu search only shows apps, files and settings on this PC, not Bing web results. Takes effect after you sign out and back in."
+section = "remove"
+level = "safe"
+presets = ["everyday", "gaming"]
+
+# Group Policy "Turn off display of recent search entries in the File
+# Explorer search box" - the documented switch that also removes web
+# suggestions from Windows search (Windows 10 2004+ and Windows 11).
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Policies\Microsoft\Windows\Explorer'
+name = "DisableSearchBoxSuggestions"
+value = { dword = 1 }
+
+# Windows 10's own per-user switch for Bing in search.
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\Search'
+name = "BingSearchEnabled"
+value = { dword = 0 }

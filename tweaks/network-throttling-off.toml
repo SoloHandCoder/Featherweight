@@ -1,0 +1,13 @@
+id = "network-throttling-off"
+title = "Network throttling off"
+description = "Stops Windows from slowing down network traffic while music or video is playing. Takes effect after a restart."
+section = "gaming"
+level = "advanced"
+
+# Multimedia Class Scheduler: default 10; 0xFFFFFFFF turns throttling off.
+[[actions]]
+type = "registry"
+hive = "hklm"
+path = 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
+name = "NetworkThrottlingIndex"
+value = { dword = 4294967295 }

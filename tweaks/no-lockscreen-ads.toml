@@ -1,0 +1,22 @@
+id = "no-lockscreen-ads"
+title = "No tips or ads on the lock screen"
+description = "Removes the \"fun facts\", tips and promotions shown on the lock screen. Your lock screen picture stays the same."
+section = "remove"
+level = "safe"
+presets = ["everyday", "gaming"]
+
+# Settings > Personalization > Lock screen > "Get fun facts, tips, tricks,
+# and more on your lock screen".
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+name = "RotatingLockScreenOverlayEnabled"
+value = { dword = 0 }
+
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+name = "SubscribedContent-338387Enabled"
+value = { dword = 0 }

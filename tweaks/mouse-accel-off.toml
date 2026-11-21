@@ -1,0 +1,29 @@
+id = "mouse-accel-off"
+title = "Mouse acceleration off"
+description = "Turns off \"Enhance pointer precision\", so the pointer moves the same distance however fast you move the mouse. Takes effect after you sign out and back in."
+section = "gaming"
+level = "safe"
+presets = ["gaming"]
+
+# Control Panel > Mouse > Pointer Options > "Enhance pointer precision".
+# Windows defaults are "1", "6", "10"; off is "0", "0", "0".
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Control Panel\Mouse'
+name = "MouseSpeed"
+value = { string = "0" }
+
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Control Panel\Mouse'
+name = "MouseThreshold1"
+value = { string = "0" }
+
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Control Panel\Mouse'
+name = "MouseThreshold2"
+value = { string = "0" }

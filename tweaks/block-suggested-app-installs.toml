@@ -1,0 +1,27 @@
+id = "block-suggested-app-installs"
+title = "Stop Windows installing suggested apps"
+description = "Stops Windows from quietly installing promoted apps and games in the background. Apps you install yourself are not affected."
+section = "remove"
+level = "safe"
+presets = ["everyday", "gaming"]
+
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+name = "SilentInstalledAppsEnabled"
+value = { dword = 0 }
+
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+name = "OemPreInstalledAppsEnabled"
+value = { dword = 0 }
+
+[[actions]]
+type = "registry"
+hive = "hkcu"
+path = 'Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager'
+name = "PreInstalledAppsEnabled"
+value = { dword = 0 }
