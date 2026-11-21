@@ -5,6 +5,8 @@ mod commands;
 mod datadir;
 mod engine;
 mod env;
+#[cfg(windows)]
+mod instance;
 mod journal;
 pub mod model;
 mod restore;
@@ -25,7 +27,7 @@ use system::windows::WindowsSystem;
 /// opens, with an unwritable journal and the reason shown by `get_overview`.
 fn load_journal() -> (Journal, Option<String>) {
     let loaded = datadir::secure_data_dir().and_then(|dir| {
-        Journal::load(dir.join(datadir::JOURNAL_FILE)).map_err(|e| e.to_string())
+        Journal::load_exclusive(dir.join(datadir::JOURNAL_FILE)).map_err(|e| e.to_string())
     });
     match loaded {
         Ok(j) => (j, None),
@@ -35,6 +37,14 @@ fn load_journal() -> (Journal, Option<String>) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Kept alive until `run` returns, i.e. until the app exits.
+    let _instance = match instance::claim(instance::MUTEX_NAME) {
+        instance::Claim::First(guard) => guard,
+        instance::Claim::AlreadyRunning => {
+            instance::show_already_running();
+            return;
+        }
+    };
     let (journal, journal_error) = load_journal();
     let engine = Engine::new(WindowsSystem::new(), Catalog::bundled(), journal, env::detect_env());
     let state = AppState {
