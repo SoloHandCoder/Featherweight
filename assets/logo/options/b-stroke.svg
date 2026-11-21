@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><defs><linearGradient id="fwbg" gradientUnits="userSpaceOnUse" x1="50" y1="220" x2="210" y2="30"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g transform="rotate(32 128 128)">
+    <path d="M128 238 V200 C98 190 80 166 80 142 L100 128 C88 104 96 62 136 22 C176 84 174 164 128 200 M128 200 V98"
+      fill="none" stroke="url(#fwbg)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  </g></svg>

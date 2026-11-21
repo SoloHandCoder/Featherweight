@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Featherweight logo options</title>
+<style>
+:root{--bg:#0f1115;--panel:#171a21;--line:#262a33;--text:#e6e8ee;--muted:#8b91a1}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 "Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;padding:32px 16px}
+h1{font:600 22px "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 24px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:20px;max-width:1400px}
+.opt{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}
+.opt header{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline;margin-bottom:14px}
+.tag{grid-row:span 2;font:700 13px system-ui;background:#232733;border-radius:6px;padding:3px 8px;color:#a5b4fc}
+h2{margin:0;font:600 16px "Segoe UI Variable Display","Segoe UI",system-ui}
+.opt p{margin:0;color:var(--muted)}
+.row{display:flex;align-items:flex-end;gap:22px;padding:16px;border-radius:10px;margin-bottom:8px;overflow:hidden}
+.row.dark{background:#0f1115}.row.light{background:#fff}
+figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:6px}
+figure svg{display:block}
+figcaption{font-size:11px;color:#8b91a1}
+.taskbar{display:flex;align-items:center;gap:4px;height:48px;padding:0 10px;background:#202020cc;border-radius:8px;margin:8px 0;justify-content:center;position:relative}
+.tb{width:40px;height:40px;border-radius:4px;display:grid;place-items:center;position:relative}
+.tb.active{background:#ffffff14}
+.tb.active::after{content:"";position:absolute;bottom:2px;width:16px;height:3px;border-radius:2px;background:#60cdff}
+.win{width:20px;height:20px;background:linear-gradient(#60cdff,#3b8ee8);clip-path:polygon(0 0,46% 0,46% 46%,0 46%,0 54%,46% 54%,46% 100%,0 100%,0 0,54% 0,100% 0,100% 46%,54% 46%,54% 54%,100% 54%,100% 100%,54% 100%,54% 54%,46% 54%)}
+.ghost{width:22px;height:22px;border-radius:5px;background:#3a3d44}
+.clock{position:absolute;right:12px;font-size:12px;color:#ddd}
+.readme{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:10px;background:#0d1117;margin-top:8px}
+.readme.lightbg{background:#fff}
+.word{font:600 30px "Segoe UI Variable Display","Segoe UI",system-ui,sans-serif;letter-spacing:-.01em;color:#e6edf3}
+.lightbg .word{color:#0f1115}
+@media (max-width:520px){.grid{grid-template-columns:1fr}.row{gap:12px}.word{font-size:24px}}
+</style></head><body>
+<h1>Featherweight: logo options</h1>
+<p class="sub">Four directions, each shown at 16, 32, 64 and 256 px on dark and light (light rows use the single-colour variant), in a taskbar and a README header.</p>
+<div class="grid">
+<section class="opt">
+  <header><span class="tag">A</span><h2>Geometric</h2><p>Two circular-arc vanes split by a negative shaft that turns solid as the quill; one cut barb. Built from arcs and a line, so it scales cleanly.</p></header>
+  <div class="row dark"><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16"><defs><linearGradient id="i0_g" gradientUnits="userSpaceOnUse" x1="60" y1="210" x2="200" y2="40"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <defs><mask id="i0_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+    <rect width="256" height="256" fill="#fff"/>
+    <path d="M118 146 L74 116" stroke="#000" stroke-width="13" stroke-linecap="round"/>
+  </mask></defs>
+  <g transform="rotate(38 128 128)" fill="url(#i0_g)">
+    <g mask="url(#i0_m)">
+      <path d="M118 34 A112 112 0 0 0 118 204 Z"/>
+      <path d="M138 20 A112 112 0 0 1 138 180 Z"/>
+    </g>
+    <rect x="118" y="176" width="20" height="62" rx="10"/>
+  </g></svg><figcaption>16</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="32" height="32"><defs><linearGradient id="i1_g" gradientUnits="userSpaceOnUse" x1="60" y1="210" x2="200" y2="40"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <defs><mask id="i1_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+    <rect width="256" height="256" fill="#fff"/>
+    <path d="M118 146 L74 116" stroke="#000" stroke-width="13" stroke-linecap="round"/>
+  </mask></defs>
+  <g transform="rotate(38 128 128)" fill="url(#i1_g)">
+    <g mask="url(#i1_m)">
+      <path d="M118 34 A112 112 0 0 0 118 204 Z"/>
+      <path d="M138 20 A112 112 0 0 1 138 180 Z"/>
+    </g>
+    <rect x="118" y="176" width="20" height="62" rx="10"/>
+  </g></svg><figcaption>32</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="64" height="64"><defs><linearGradient id="i2_g" gradientUnits="userSpaceOnUse" x1="60" y1="210" x2="200" y2="40"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <defs><mask id="i2_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+    <rect width="256" height="256" fill="#fff"/>
+    <path d="M118 146 L74 116" stroke="#000" stroke-width="13" stroke-linecap="round"/>
+  </mask></defs>
+  <g transform="rotate(38 128 128)" fill="url(#i2_g)">
+    <g mask="url(#i2_m)">
+      <path d="M118 34 A112 112 0 0 0 118 204 Z"/>
+      <path d="M138 20 A112 112 0 0 1 138 180 Z"/>
+    </g>
+    <rect x="118" y="176" width="20" height="62" rx="10"/>
+  </g></svg><figcaption>64</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><defs><linearGradient id="i3_g" gradientUnits="userSpaceOnUse" x1="60" y1="210" x2="200" y2="40"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <defs><mask id="i3_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+    <rect width="256" height="256" fill="#fff"/>
+    <path d="M118 146 L74 116" stroke="#000" stroke-width="13" stroke-linecap="round"/>
+  </mask></defs>
+  <g transform="rotate(38 128 128)" fill="url(#i3_g)">
+    <g mask="url(#i3_m)">
+      <path d="M118 34 A112 112 0 0 0 118 204 Z"/>
+      <path d="M138 20 A112 112 0 0 1 138 180 Z"/>
+    </g>
+    <rect x="118" y="176" width="20" height="62" rx="10"/>
+  </g></svg><figcaption>256</figcaption></figure></div>
+  <div class="row light"><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16">
+  <defs><mask id="i4_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+    <rect width="256" height="256" fill="#fff"/>
+    <path d="M118 146 L74 116" stroke="#000" stroke-width="13" stroke-linecap="round"/>
+  </mask></defs>
+  <g transform="rotate(38 128 128)" fill="#0f1115">
+    <g mask="url(#i4_m)">
+      <path d="M118 34 A112 112 0 0 0 118 204 Z"/>
+      <path d="M138 20 A112 112 0 0 1 138 180 Z"/>
+    </g>
+    <rect x="118" y="176" width="20" height="62" rx="10"/>
+  </g></svg><figcaption>16</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="32" height="32">
+  <defs><mask id="i5_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+    <rect width="256" height="256" fill="#fff"/>
+    <path d="M118 146 L74 116" stroke="#000" stroke-width="13" stroke-linecap="round"/>
+  </mask></defs>
+  <g transform="rotate(38 128 128)" fill="#0f1115">
+    <g mask="url(#i5_m)">
+      <path d="M118 34 A112 112 0 0 0 118 204 Z"/>
+      <path d="M138 20 A112 112 0 0 1 138 180 Z"/>
+    </g>
+    <rect x="118" y="176" width="20" height="62" rx="10"/>
+  </g></svg><figcaption>32</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="64" height="64">
+  <defs><mask id="i6_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+    <rect width="256" height="256" fill="#fff"/>
+    <path d="M118 146 L74 116" stroke="#000" stroke-width="13" stroke-linecap="round"/>
+  </mask></defs>
+  <g transform="rotate(38 128 128)" fill="#0f1115">
+    <g mask="url(#i6_m)">
+      <path d="M118 34 A112 112 0 0 0 118 204 Z"/>
+      <path d="M138 20 A112 112 0 0 1 138 180 Z"/>
+    </g>
+    <rect x="118" y="176" width="20" height="62" rx="10"/>
+  </g></svg><figcaption>64</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs><mask id="i7_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+    <rect width="256" height="256" fill="#fff"/>
+    <path d="M118 146 L74 116" stroke="#000" stroke-width="13" stroke-linecap="round"/>
+  </mask></defs>
+  <g transform="rotate(38 128 128)" fill="#0f1115">
+    <g mask="url(#i7_m)">
+      <path d="M118 34 A112 112 0 0 0 118 204 Z"/>
+      <path d="M138 20 A112 112 0 0 1 138 180 Z"/>
+    </g>
+    <rect x="118" y="176" width="20" height="62" rx="10"/>
+  </g></svg><figcaption>256</figcaption></figure></div>
+  <div class="taskbar">
+    <span class="tb"><span class="win"></span></span>
+    <span class="tb"><span class="ghost"></span></span>
+    <span class="tb active"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="24" height="24"><defs><linearGradient id="i8_g" gradientUnits="userSpaceOnUse" x1="60" y1="210" x2="200" y2="40"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <defs><mask id="i8_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+    <rect width="256" height="256" fill="#fff"/>
+    <path d="M118 146 L74 116" stroke="#000" stroke-width="13" stroke-linecap="round"/>
+  </mask></defs>
+  <g transform="rotate(38 128 128)" fill="url(#i8_g)">
+    <g mask="url(#i8_m)">
+      <path d="M118 34 A112 112 0 0 0 118 204 Z"/>
+      <path d="M138 20 A112 112 0 0 1 138 180 Z"/>
+    </g>
+    <rect x="118" y="176" width="20" height="62" rx="10"/>
+  </g></svg></span>
+    <span class="tb"><span class="ghost"></span></span>
+    <span class="clock">14:32</span>
+  </div>
+  <div class="readme"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="44" height="44"><defs><linearGradient id="i9_g" gradientUnits="userSpaceOnUse" x1="60" y1="210" x2="200" y2="40"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <defs><mask id="i9_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+    <rect width="256" height="256" fill="#fff"/>
+    <path d="M118 146 L74 116" stroke="#000" stroke-width="13" stroke-linecap="round"/>
+  </mask></defs>
+  <g transform="rotate(38 128 128)" fill="url(#i9_g)">
+    <g mask="url(#i9_m)">
+      <path d="M118 34 A112 112 0 0 0 118 204 Z"/>
+      <path d="M138 20 A112 112 0 0 1 138 180 Z"/>
+    </g>
+    <rect x="118" y="176" width="20" height="62" rx="10"/>
+  </g></svg><span class="word">Featherweight</span></div>
+  <div class="readme lightbg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="44" height="44">
+  <defs><mask id="i10_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+    <rect width="256" height="256" fill="#fff"/>
+    <path d="M118 146 L74 116" stroke="#000" stroke-width="13" stroke-linecap="round"/>
+  </mask></defs>
+  <g transform="rotate(38 128 128)" fill="#0f1115">
+    <g mask="url(#i10_m)">
+      <path d="M118 34 A112 112 0 0 0 118 204 Z"/>
+      <path d="M138 20 A112 112 0 0 1 138 180 Z"/>
+    </g>
+    <rect x="118" y="176" width="20" height="62" rx="10"/>
+  </g></svg><span class="word">Featherweight</span></div>
+</section>
+<section class="opt">
+  <header><span class="tag">B</span><h2>Single-stroke</h2><p>One unbroken line draws quill, outline and shaft. Light by construction: the mark is almost all air.</p></header>
+  <div class="row dark"><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16"><defs><linearGradient id="i11_g" gradientUnits="userSpaceOnUse" x1="50" y1="220" x2="210" y2="30"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g transform="rotate(32 128 128)">
+    <path d="M128 238 V200 C98 190 80 166 80 142 L100 128 C88 104 96 62 136 22 C176 84 174 164 128 200 M128 200 V98"
+      fill="none" stroke="url(#i11_g)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  </g></svg><figcaption>16</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="32" height="32"><defs><linearGradient id="i12_g" gradientUnits="userSpaceOnUse" x1="50" y1="220" x2="210" y2="30"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g transform="rotate(32 128 128)">
+    <path d="M128 238 V200 C98 190 80 166 80 142 L100 128 C88 104 96 62 136 22 C176 84 174 164 128 200 M128 200 V98"
+      fill="none" stroke="url(#i12_g)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  </g></svg><figcaption>32</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="64" height="64"><defs><linearGradient id="i13_g" gradientUnits="userSpaceOnUse" x1="50" y1="220" x2="210" y2="30"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g transform="rotate(32 128 128)">
+    <path d="M128 238 V200 C98 190 80 166 80 142 L100 128 C88 104 96 62 136 22 C176 84 174 164 128 200 M128 200 V98"
+      fill="none" stroke="url(#i13_g)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  </g></svg><figcaption>64</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><defs><linearGradient id="i14_g" gradientUnits="userSpaceOnUse" x1="50" y1="220" x2="210" y2="30"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g transform="rotate(32 128 128)">
+    <path d="M128 238 V200 C98 190 80 166 80 142 L100 128 C88 104 96 62 136 22 C176 84 174 164 128 200 M128 200 V98"
+      fill="none" stroke="url(#i14_g)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  </g></svg><figcaption>256</figcaption></figure></div>
+  <div class="row light"><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16">
+  <g transform="rotate(32 128 128)">
+    <path d="M128 238 V200 C98 190 80 166 80 142 L100 128 C88 104 96 62 136 22 C176 84 174 164 128 200 M128 200 V98"
+      fill="none" stroke="#0f1115" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  </g></svg><figcaption>16</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="32" height="32">
+  <g transform="rotate(32 128 128)">
+    <path d="M128 238 V200 C98 190 80 166 80 142 L100 128 C88 104 96 62 136 22 C176 84 174 164 128 200 M128 200 V98"
+      fill="none" stroke="#0f1115" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  </g></svg><figcaption>32</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="64" height="64">
+  <g transform="rotate(32 128 128)">
+    <path d="M128 238 V200 C98 190 80 166 80 142 L100 128 C88 104 96 62 136 22 C176 84 174 164 128 200 M128 200 V98"
+      fill="none" stroke="#0f1115" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  </g></svg><figcaption>64</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <g transform="rotate(32 128 128)">
+    <path d="M128 238 V200 C98 190 80 166 80 142 L100 128 C88 104 96 62 136 22 C176 84 174 164 128 200 M128 200 V98"
+      fill="none" stroke="#0f1115" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  </g></svg><figcaption>256</figcaption></figure></div>
+  <div class="taskbar">
+    <span class="tb"><span class="win"></span></span>
+    <span class="tb"><span class="ghost"></span></span>
+    <span class="tb active"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="24" height="24"><defs><linearGradient id="i19_g" gradientUnits="userSpaceOnUse" x1="50" y1="220" x2="210" y2="30"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g transform="rotate(32 128 128)">
+    <path d="M128 238 V200 C98 190 80 166 80 142 L100 128 C88 104 96 62 136 22 C176 84 174 164 128 200 M128 200 V98"
+      fill="none" stroke="url(#i19_g)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  </g></svg></span>
+    <span class="tb"><span class="ghost"></span></span>
+    <span class="clock">14:32</span>
+  </div>
+  <div class="readme"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="44" height="44"><defs><linearGradient id="i20_g" gradientUnits="userSpaceOnUse" x1="50" y1="220" x2="210" y2="30"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g transform="rotate(32 128 128)">
+    <path d="M128 238 V200 C98 190 80 166 80 142 L100 128 C88 104 96 62 136 22 C176 84 174 164 128 200 M128 200 V98"
+      fill="none" stroke="url(#i20_g)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  </g></svg><span class="word">Featherweight</span></div>
+  <div class="readme lightbg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="44" height="44">
+  <g transform="rotate(32 128 128)">
+    <path d="M128 238 V200 C98 190 80 166 80 142 L100 128 C88 104 96 62 136 22 C176 84 174 164 128 200 M128 200 V98"
+      fill="none" stroke="#0f1115" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  </g></svg><span class="word">Featherweight</span></div>
+</section>
+<section class="opt">
+  <header><span class="tag">C</span><h2>Monogram</h2><p>The F is a half-feather: stem as quill, arms as up-swept barbs. Doubles as a letter, so it works as a favicon alone.</p></header>
+  <div class="row dark"><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16"><defs><linearGradient id="i22_g" gradientUnits="userSpaceOnUse" x1="60" y1="236" x2="210" y2="24"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g fill="url(#i22_g)">
+    <path d="M62 200 V78 C62 58 74 48 94 44 L206 22 C218 20 226 30 220 41 L200 74 C196 81 189 85 181 86 L168 88 L188 52 L154 93 L102 97 V200 L82 242 Z"/>
+    <path d="M102 128 L176 114 C187 112 194 121 188 131 L172 158 C168 164 162 167 156 168 L102 177 Z"/>
+  </g></svg><figcaption>16</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="32" height="32"><defs><linearGradient id="i23_g" gradientUnits="userSpaceOnUse" x1="60" y1="236" x2="210" y2="24"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g fill="url(#i23_g)">
+    <path d="M62 200 V78 C62 58 74 48 94 44 L206 22 C218 20 226 30 220 41 L200 74 C196 81 189 85 181 86 L168 88 L188 52 L154 93 L102 97 V200 L82 242 Z"/>
+    <path d="M102 128 L176 114 C187 112 194 121 188 131 L172 158 C168 164 162 167 156 168 L102 177 Z"/>
+  </g></svg><figcaption>32</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="64" height="64"><defs><linearGradient id="i24_g" gradientUnits="userSpaceOnUse" x1="60" y1="236" x2="210" y2="24"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g fill="url(#i24_g)">
+    <path d="M62 200 V78 C62 58 74 48 94 44 L206 22 C218 20 226 30 220 41 L200 74 C196 81 189 85 181 86 L168 88 L188 52 L154 93 L102 97 V200 L82 242 Z"/>
+    <path d="M102 128 L176 114 C187 112 194 121 188 131 L172 158 C168 164 162 167 156 168 L102 177 Z"/>
+  </g></svg><figcaption>64</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><defs><linearGradient id="i25_g" gradientUnits="userSpaceOnUse" x1="60" y1="236" x2="210" y2="24"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g fill="url(#i25_g)">
+    <path d="M62 200 V78 C62 58 74 48 94 44 L206 22 C218 20 226 30 220 41 L200 74 C196 81 189 85 181 86 L168 88 L188 52 L154 93 L102 97 V200 L82 242 Z"/>
+    <path d="M102 128 L176 114 C187 112 194 121 188 131 L172 158 C168 164 162 167 156 168 L102 177 Z"/>
+  </g></svg><figcaption>256</figcaption></figure></div>
+  <div class="row light"><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16">
+  <g fill="#0f1115">
+    <path d="M62 200 V78 C62 58 74 48 94 44 L206 22 C218 20 226 30 220 41 L200 74 C196 81 189 85 181 86 L168 88 L188 52 L154 93 L102 97 V200 L82 242 Z"/>
+    <path d="M102 128 L176 114 C187 112 194 121 188 131 L172 158 C168 164 162 167 156 168 L102 177 Z"/>
+  </g></svg><figcaption>16</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="32" height="32">
+  <g fill="#0f1115">
+    <path d="M62 200 V78 C62 58 74 48 94 44 L206 22 C218 20 226 30 220 41 L200 74 C196 81 189 85 181 86 L168 88 L188 52 L154 93 L102 97 V200 L82 242 Z"/>
+    <path d="M102 128 L176 114 C187 112 194 121 188 131 L172 158 C168 164 162 167 156 168 L102 177 Z"/>
+  </g></svg><figcaption>32</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="64" height="64">
+  <g fill="#0f1115">
+    <path d="M62 200 V78 C62 58 74 48 94 44 L206 22 C218 20 226 30 220 41 L200 74 C196 81 189 85 181 86 L168 88 L188 52 L154 93 L102 97 V200 L82 242 Z"/>
+    <path d="M102 128 L176 114 C187 112 194 121 188 131 L172 158 C168 164 162 167 156 168 L102 177 Z"/>
+  </g></svg><figcaption>64</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <g fill="#0f1115">
+    <path d="M62 200 V78 C62 58 74 48 94 44 L206 22 C218 20 226 30 220 41 L200 74 C196 81 189 85 181 86 L168 88 L188 52 L154 93 L102 97 V200 L82 242 Z"/>
+    <path d="M102 128 L176 114 C187 112 194 121 188 131 L172 158 C168 164 162 167 156 168 L102 177 Z"/>
+  </g></svg><figcaption>256</figcaption></figure></div>
+  <div class="taskbar">
+    <span class="tb"><span class="win"></span></span>
+    <span class="tb"><span class="ghost"></span></span>
+    <span class="tb active"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="24" height="24"><defs><linearGradient id="i30_g" gradientUnits="userSpaceOnUse" x1="60" y1="236" x2="210" y2="24"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g fill="url(#i30_g)">
+    <path d="M62 200 V78 C62 58 74 48 94 44 L206 22 C218 20 226 30 220 41 L200 74 C196 81 189 85 181 86 L168 88 L188 52 L154 93 L102 97 V200 L82 242 Z"/>
+    <path d="M102 128 L176 114 C187 112 194 121 188 131 L172 158 C168 164 162 167 156 168 L102 177 Z"/>
+  </g></svg></span>
+    <span class="tb"><span class="ghost"></span></span>
+    <span class="clock">14:32</span>
+  </div>
+  <div class="readme"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="44" height="44"><defs><linearGradient id="i31_g" gradientUnits="userSpaceOnUse" x1="60" y1="236" x2="210" y2="24"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g fill="url(#i31_g)">
+    <path d="M62 200 V78 C62 58 74 48 94 44 L206 22 C218 20 226 30 220 41 L200 74 C196 81 189 85 181 86 L168 88 L188 52 L154 93 L102 97 V200 L82 242 Z"/>
+    <path d="M102 128 L176 114 C187 112 194 121 188 131 L172 158 C168 164 162 167 156 168 L102 177 Z"/>
+  </g></svg><span class="word">Featherweight</span></div>
+  <div class="readme lightbg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="44" height="44">
+  <g fill="#0f1115">
+    <path d="M62 200 V78 C62 58 74 48 94 44 L206 22 C218 20 226 30 220 41 L200 74 C196 81 189 85 181 86 L168 88 L188 52 L154 93 L102 97 V200 L82 242 Z"/>
+    <path d="M102 128 L176 114 C187 112 194 121 188 131 L172 158 C168 164 162 167 156 168 L102 177 Z"/>
+  </g></svg><span class="word">Featherweight</span></div>
+</section>
+<section class="opt">
+  <header><span class="tag">D</span><h2>Negative space</h2><p>The feather is what is removed from the tile, which is literally what the app does. Strongest app-icon silhouette.</p></header>
+  <div class="row dark"><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16"><defs><linearGradient id="i33_g" gradientUnits="userSpaceOnUse" x1="0" y1="256" x2="256" y2="0"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient>
+    <mask id="i33_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#fff"/>
+      <g transform="rotate(40 128 132)">
+        <path d="M128 30 C178 66 186 146 142 196 L114 196 C72 146 80 66 128 30 Z" fill="#000"/>
+        <rect x="119" y="186" width="18" height="50" rx="9" fill="#000"/>
+        <path d="M128 78 V190" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+        <path d="M122 150 L80 124" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+      </g>
+    </mask></defs>
+  <rect width="256" height="256" rx="58" fill="url(#i33_g)" mask="url(#i33_m)"/></svg><figcaption>16</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="32" height="32"><defs><linearGradient id="i34_g" gradientUnits="userSpaceOnUse" x1="0" y1="256" x2="256" y2="0"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient>
+    <mask id="i34_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#fff"/>
+      <g transform="rotate(40 128 132)">
+        <path d="M128 30 C178 66 186 146 142 196 L114 196 C72 146 80 66 128 30 Z" fill="#000"/>
+        <rect x="119" y="186" width="18" height="50" rx="9" fill="#000"/>
+        <path d="M128 78 V190" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+        <path d="M122 150 L80 124" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+      </g>
+    </mask></defs>
+  <rect width="256" height="256" rx="58" fill="url(#i34_g)" mask="url(#i34_m)"/></svg><figcaption>32</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="64" height="64"><defs><linearGradient id="i35_g" gradientUnits="userSpaceOnUse" x1="0" y1="256" x2="256" y2="0"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient>
+    <mask id="i35_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#fff"/>
+      <g transform="rotate(40 128 132)">
+        <path d="M128 30 C178 66 186 146 142 196 L114 196 C72 146 80 66 128 30 Z" fill="#000"/>
+        <rect x="119" y="186" width="18" height="50" rx="9" fill="#000"/>
+        <path d="M128 78 V190" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+        <path d="M122 150 L80 124" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+      </g>
+    </mask></defs>
+  <rect width="256" height="256" rx="58" fill="url(#i35_g)" mask="url(#i35_m)"/></svg><figcaption>64</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><defs><linearGradient id="i36_g" gradientUnits="userSpaceOnUse" x1="0" y1="256" x2="256" y2="0"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient>
+    <mask id="i36_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#fff"/>
+      <g transform="rotate(40 128 132)">
+        <path d="M128 30 C178 66 186 146 142 196 L114 196 C72 146 80 66 128 30 Z" fill="#000"/>
+        <rect x="119" y="186" width="18" height="50" rx="9" fill="#000"/>
+        <path d="M128 78 V190" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+        <path d="M122 150 L80 124" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+      </g>
+    </mask></defs>
+  <rect width="256" height="256" rx="58" fill="url(#i36_g)" mask="url(#i36_m)"/></svg><figcaption>256</figcaption></figure></div>
+  <div class="row light"><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="16" height="16"><defs>
+    <mask id="i37_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#fff"/>
+      <g transform="rotate(40 128 132)">
+        <path d="M128 30 C178 66 186 146 142 196 L114 196 C72 146 80 66 128 30 Z" fill="#000"/>
+        <rect x="119" y="186" width="18" height="50" rx="9" fill="#000"/>
+        <path d="M128 78 V190" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+        <path d="M122 150 L80 124" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+      </g>
+    </mask></defs>
+  <rect width="256" height="256" rx="58" fill="#0f1115" mask="url(#i37_m)"/></svg><figcaption>16</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="32" height="32"><defs>
+    <mask id="i38_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#fff"/>
+      <g transform="rotate(40 128 132)">
+        <path d="M128 30 C178 66 186 146 142 196 L114 196 C72 146 80 66 128 30 Z" fill="#000"/>
+        <rect x="119" y="186" width="18" height="50" rx="9" fill="#000"/>
+        <path d="M128 78 V190" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+        <path d="M122 150 L80 124" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+      </g>
+    </mask></defs>
+  <rect width="256" height="256" rx="58" fill="#0f1115" mask="url(#i38_m)"/></svg><figcaption>32</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="64" height="64"><defs>
+    <mask id="i39_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#fff"/>
+      <g transform="rotate(40 128 132)">
+        <path d="M128 30 C178 66 186 146 142 196 L114 196 C72 146 80 66 128 30 Z" fill="#000"/>
+        <rect x="119" y="186" width="18" height="50" rx="9" fill="#000"/>
+        <path d="M128 78 V190" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+        <path d="M122 150 L80 124" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+      </g>
+    </mask></defs>
+  <rect width="256" height="256" rx="58" fill="#0f1115" mask="url(#i39_m)"/></svg><figcaption>64</figcaption></figure><figure><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256"><defs>
+    <mask id="i40_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#fff"/>
+      <g transform="rotate(40 128 132)">
+        <path d="M128 30 C178 66 186 146 142 196 L114 196 C72 146 80 66 128 30 Z" fill="#000"/>
+        <rect x="119" y="186" width="18" height="50" rx="9" fill="#000"/>
+        <path d="M128 78 V190" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+        <path d="M122 150 L80 124" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+      </g>
+    </mask></defs>
+  <rect width="256" height="256" rx="58" fill="#0f1115" mask="url(#i40_m)"/></svg><figcaption>256</figcaption></figure></div>
+  <div class="taskbar">
+    <span class="tb"><span class="win"></span></span>
+    <span class="tb"><span class="ghost"></span></span>
+    <span class="tb active"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="24" height="24"><defs><linearGradient id="i41_g" gradientUnits="userSpaceOnUse" x1="0" y1="256" x2="256" y2="0"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient>
+    <mask id="i41_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#fff"/>
+      <g transform="rotate(40 128 132)">
+        <path d="M128 30 C178 66 186 146 142 196 L114 196 C72 146 80 66 128 30 Z" fill="#000"/>
+        <rect x="119" y="186" width="18" height="50" rx="9" fill="#000"/>
+        <path d="M128 78 V190" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+        <path d="M122 150 L80 124" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+      </g>
+    </mask></defs>
+  <rect width="256" height="256" rx="58" fill="url(#i41_g)" mask="url(#i41_m)"/></svg></span>
+    <span class="tb"><span class="ghost"></span></span>
+    <span class="clock">14:32</span>
+  </div>
+  <div class="readme"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="44" height="44"><defs><linearGradient id="i42_g" gradientUnits="userSpaceOnUse" x1="0" y1="256" x2="256" y2="0"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient>
+    <mask id="i42_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#fff"/>
+      <g transform="rotate(40 128 132)">
+        <path d="M128 30 C178 66 186 146 142 196 L114 196 C72 146 80 66 128 30 Z" fill="#000"/>
+        <rect x="119" y="186" width="18" height="50" rx="9" fill="#000"/>
+        <path d="M128 78 V190" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+        <path d="M122 150 L80 124" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+      </g>
+    </mask></defs>
+  <rect width="256" height="256" rx="58" fill="url(#i42_g)" mask="url(#i42_m)"/></svg><span class="word">Featherweight</span></div>
+  <div class="readme lightbg"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="44" height="44"><defs>
+    <mask id="i43_m" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#fff"/>
+      <g transform="rotate(40 128 132)">
+        <path d="M128 30 C178 66 186 146 142 196 L114 196 C72 146 80 66 128 30 Z" fill="#000"/>
+        <rect x="119" y="186" width="18" height="50" rx="9" fill="#000"/>
+        <path d="M128 78 V190" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+        <path d="M122 150 L80 124" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+      </g>
+    </mask></defs>
+  <rect width="256" height="256" rx="58" fill="#0f1115" mask="url(#i43_m)"/></svg><span class="word">Featherweight</span></div>
+</section></div>
+</body></html>
