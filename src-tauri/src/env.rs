@@ -41,8 +41,10 @@ pub fn detect_env() -> Env {
     Env {
         build: win::build_number(),
         is_laptop: win::is_laptop(),
-        // If the explorer.exe owner can't be determined (e.g. no explorer is
-        // running) assume the common case: the admin at the keyboard.
+        // Only "no explorer.exe in the console session" assumes the common
+        // case (the admin at the keyboard). If explorer exists but its
+        // process or token can't be opened (e.g. access denied), it belongs
+        // to someone else, so per-user tweaks stay off.
         per_user_allowed: win::same_user_as_explorer().unwrap_or(true),
     }
 }
@@ -97,7 +99,8 @@ mod win {
     }
 
     /// TOKEN_USER blob (the SID points inside the buffer) for a process handle.
-    fn token_user(process: HANDLE) -> Option<Vec<u8>> {
+    /// Backed by `u64`s so the buffer is 8-byte aligned for `TOKEN_USER`.
+    fn token_user(process: HANDLE) -> Option<Vec<u64>> {
         let mut token = HANDLE::default();
         // SAFETY: valid process handle and out-pointer.
         unsafe { OpenProcessToken(process, TOKEN_QUERY, &mut token) }.ok()?;
@@ -108,7 +111,7 @@ mod win {
         if len == 0 {
             return None;
         }
-        let mut buf = vec![0u8; len as usize];
+        let mut buf = vec![0u64; (len as usize).div_ceil(8)];
         // SAFETY: `buf` is `len` bytes long.
         unsafe {
             GetTokenInformation(token.0, TokenUser, Some(buf.as_mut_ptr().cast()), len, &mut len)
@@ -117,7 +120,7 @@ mod win {
         Some(buf)
     }
 
-    fn sid_of(blob: &[u8]) -> PSID {
+    fn sid_of(blob: &[u64]) -> PSID {
         // SAFETY: `blob` was filled by GetTokenInformation(TokenUser).
         unsafe { (*blob.as_ptr().cast::<TOKEN_USER>()).User.Sid }
     }
@@ -150,14 +153,23 @@ mod win {
         }
     }
 
-    /// `None` when explorer's owner can't be determined.
+    /// `None` only when there is no explorer.exe in the console session.
+    /// `Some(false)` when explorer exists but its owner can't be read or
+    /// differs from ours.
     pub fn same_user_as_explorer() -> Option<bool> {
         let pid = console_explorer_pid()?;
         // SAFETY: valid pid; handle is closed by `Owned`.
-        let explorer = Owned(unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?);
-        let theirs = token_user(explorer.0)?;
-        // SAFETY: pseudo-handle, needs no closing.
-        let ours = token_user(unsafe { GetCurrentProcess() })?;
+        let Ok(h) = (unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }) else {
+            return Some(false);
+        };
+        let explorer = Owned(h);
+        let (Some(theirs), Some(ours)) = (
+            token_user(explorer.0),
+            // SAFETY: pseudo-handle, needs no closing.
+            token_user(unsafe { GetCurrentProcess() }),
+        ) else {
+            return Some(false);
+        };
         // SAFETY: both SIDs live inside the live buffers above.
         Some(unsafe { EqualSid(sid_of(&ours), sid_of(&theirs)) }.is_ok())
     }
