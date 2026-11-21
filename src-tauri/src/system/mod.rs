@@ -19,6 +19,21 @@ pub enum SysError {
     Other(String),
 }
 
+/// Prefix of the `SysError::Other` message of a `stop_service` failure that
+/// happened AFTER the stop request was sent (the service may be stopped).
+const STOP_SENT: &str = "[stop-sent] ";
+
+impl SysError {
+    pub fn stop_sent(msg: &dyn std::fmt::Display) -> SysError {
+        SysError::Other(format!("{STOP_SENT}{msg}"))
+    }
+
+    /// True if this error came from a `stop_service` whose stop was sent.
+    pub fn is_stop_sent(&self) -> bool {
+        matches!(self, SysError::Other(m) if m.starts_with(STOP_SENT))
+    }
+}
+
 pub trait System {
     fn reg_get(&self, hive: Hive, path: &str, name: &str) -> Result<Option<RegData>, SysError>;
     /// `None` deletes the value; keys are created as needed.
@@ -36,6 +51,12 @@ pub trait System {
     fn service_start(&self, name: &str) -> Result<Option<StartType>, SysError>;
     /// `Disabled` also stops the service.
     fn set_service_start(&mut self, name: &str, start: StartType) -> Result<(), SysError>;
+    /// Stops the service and waits up to 30 s for STOPPED. Returns whether it
+    /// WAS running (already stopped -> `Ok(false)`); absent -> `NotFound`.
+    fn stop_service(&mut self, name: &str) -> Result<bool, SysError>;
+    fn start_service(&mut self, name: &str) -> Result<(), SysError>;
+    /// Number of Win32 services currently active.
+    fn running_service_count(&self) -> Result<u32, SysError>;
     /// `None` = task absent.
     fn task_enabled(&self, path: &str) -> Result<Option<bool>, SysError>;
     fn set_task_enabled(&mut self, path: &str, enabled: bool) -> Result<(), SysError>;

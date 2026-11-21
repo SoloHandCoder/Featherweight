@@ -9,7 +9,8 @@ use std::sync::OnceLock;
 
 use ::windows::Win32::Foundation::{
     CloseHandle, ERROR_ACCESS_DENIED, ERROR_SERVICE_CANNOT_ACCEPT_CTRL,
-    ERROR_SERVICE_DOES_NOT_EXIST, ERROR_SERVICE_NOT_ACTIVE, HANDLE,
+    ERROR_MORE_DATA, ERROR_SERVICE_ALREADY_RUNNING, ERROR_SERVICE_DOES_NOT_EXIST,
+    ERROR_SERVICE_NOT_ACTIVE, HANDLE,
 };
 use ::windows::Win32::Security::{
     GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation,
@@ -19,7 +20,9 @@ use ::windows::Win32::System::Services::{
     OpenServiceW, QUERY_SERVICE_CONFIGW, QueryServiceConfigW, SC_HANDLE, SC_MANAGER_CONNECT,
     SERVICE_AUTO_START, SERVICE_CHANGE_CONFIG, SERVICE_CONTROL_STOP, SERVICE_DEMAND_START,
     SERVICE_DISABLED, SERVICE_ERROR, SERVICE_NO_CHANGE, SERVICE_QUERY_CONFIG, SERVICE_START_TYPE,
-    SERVICE_STATUS, SERVICE_STOP,
+    SERVICE_STATUS, SERVICE_STOP, EnumServicesStatusExW, QueryServiceStatus, SC_ENUM_PROCESS_INFO,
+    SC_MANAGER_ENUMERATE_SERVICE, SERVICE_ACTIVE, SERVICE_QUERY_STATUS, SERVICE_START,
+    SERVICE_STOPPED, SERVICE_WIN32, StartServiceW,
 };
 use ::windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 use ::windows::core::{HSTRING, PCWSTR};
@@ -314,8 +317,12 @@ impl Drop for Sc {
 }
 
 fn open_scm() -> Result<Sc, SysError> {
+    open_scm_with(SC_MANAGER_CONNECT)
+}
+
+fn open_scm_with(access: u32) -> Result<Sc, SysError> {
     // SAFETY: null machine/database names select the local active database.
-    unsafe { OpenSCManagerW(PCWSTR::null(), PCWSTR::null(), SC_MANAGER_CONNECT) }
+    unsafe { OpenSCManagerW(PCWSTR::null(), PCWSTR::null(), access) }
         .map(Sc)
         .map_err(|e| map_win(e, "OpenSCManager"))
 }
@@ -498,6 +505,100 @@ impl System for WindowsSystem {
             }
         }
         Ok(())
+    }
+
+    fn stop_service(&mut self, name: &str) -> Result<bool, SysError> {
+        let scm = open_scm()?;
+        let Some(svc) = open_service(&scm, name, SERVICE_STOP | SERVICE_QUERY_STATUS)? else {
+            return Err(SysError::NotFound(format!("service {name}")));
+        };
+        let query = |svc: &Sc| -> Result<SERVICE_STATUS, SysError> {
+            let mut st = SERVICE_STATUS::default();
+            // SAFETY: valid handle and out-pointer.
+            unsafe { QueryServiceStatus(svc.0, &mut st) }
+                .map_err(|e| map_win(e, &format!("QueryServiceStatus {name}")))?;
+            Ok(st)
+        };
+        if query(&svc)?.dwCurrentState == SERVICE_STOPPED {
+            return Ok(false);
+        }
+        let mut status = SERVICE_STATUS::default();
+        // SAFETY: valid handle and out-pointer.
+        if let Err(e) = unsafe { ControlService(svc.0, SERVICE_CONTROL_STOP, &mut status) } {
+            if win32_code(&e) == ERROR_SERVICE_NOT_ACTIVE.0 {
+                return Ok(false);
+            }
+            return Err(map_win(e, &format!("stop {name}")));
+        }
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            // From here on a stop HAS been requested: failures are marked so
+            // callers know the service may be (partly) stopped.
+            if query(&svc).map_err(|e| SysError::stop_sent(&e))?.dwCurrentState == SERVICE_STOPPED
+            {
+                return Ok(true);
+            }
+            if Instant::now() >= deadline {
+                return Err(SysError::stop_sent(&format!(
+                    "service {name} did not stop within 30 s"
+                )));
+            }
+            std::thread::sleep(Duration::from_millis(250));
+        }
+    }
+
+    fn start_service(&mut self, name: &str) -> Result<(), SysError> {
+        let scm = open_scm()?;
+        let Some(svc) = open_service(&scm, name, SERVICE_START)? else {
+            return Err(SysError::NotFound(format!("service {name}")));
+        };
+        // SAFETY: valid handle, no arguments.
+        match unsafe { StartServiceW(svc.0, None) } {
+            Ok(()) => Ok(()),
+            Err(e) if win32_code(&e) == ERROR_SERVICE_ALREADY_RUNNING.0 => Ok(()),
+            Err(e) => Err(map_win(e, &format!("start {name}"))),
+        }
+    }
+
+    fn running_service_count(&self) -> Result<u32, SysError> {
+        let scm = open_scm_with(SC_MANAGER_ENUMERATE_SERVICE)?;
+        let mut resume = 0u32;
+        let mut total = 0u32;
+        // 8-byte aligned storage for the ENUM_SERVICE_STATUS_PROCESSW array.
+        let mut buf = vec![0u64; 64 * 1024 / 8];
+        loop {
+            let mut needed = 0u32;
+            let mut returned = 0u32;
+            // SAFETY: the u64 buffer is reinterpreted as `len * 8` bytes of the
+            // same allocation; out-pointers are live locals.
+            let bytes = unsafe {
+                std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), buf.len() * 8)
+            };
+            // SAFETY: `bytes` is valid for its length.
+            let r = unsafe {
+                EnumServicesStatusExW(
+                    scm.0,
+                    SC_ENUM_PROCESS_INFO,
+                    SERVICE_WIN32,
+                    SERVICE_ACTIVE,
+                    Some(bytes),
+                    &mut needed,
+                    &mut returned,
+                    Some(&mut resume),
+                    PCWSTR::null(),
+                )
+            };
+            total += returned;
+            match r {
+                Ok(()) => return Ok(total),
+                Err(e) if win32_code(&e) == ERROR_MORE_DATA.0 => {
+                    if returned == 0 {
+                        buf = vec![0u64; (needed as usize).div_ceil(8).max(buf.len() * 2)];
+                    }
+                }
+                Err(e) => return Err(map_win(e, "EnumServicesStatusEx")),
+            }
+        }
     }
 
     fn task_enabled(&self, path: &str) -> Result<Option<bool>, SysError> {
