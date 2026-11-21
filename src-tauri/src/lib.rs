@@ -1,5 +1,6 @@
 mod actions;
 mod catalog;
+mod journal;
 mod model;
 mod system;
 
