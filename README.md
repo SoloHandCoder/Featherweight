@@ -35,7 +35,7 @@ There are plenty of debloat scripts. Featherweight is built for people who want 
 
 ## What it changes
 
-Every tweak is a small TOML file in [`tweaks/`](tweaks). The lists below come from those files.
+Every tweak is a small TOML file in [`tweaks/`](tweaks). The lists below come from those files. Tweaks that don't apply to your Windows version or edition are hidden automatically.
 
 ### Remove
 
@@ -128,7 +128,7 @@ Featherweight isn't code-signed yet, so Windows SmartScreen may warn you. Click 
 
 You need:
 
-- [Node.js](https://nodejs.org/) 24 or newer
+- [Node.js](https://nodejs.org/) 24 (what CI uses)
 - [Rust](https://rustup.rs/) stable with the MSVC toolchain (install the Visual Studio C++ Build Tools when rustup asks)
 
 ```sh

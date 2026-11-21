@@ -35,6 +35,16 @@ jobs:
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
+      - name: Check tag matches app version
+        shell: pwsh
+        run: |
+          $tagVersion = $env:GITHUB_REF_NAME -replace '^v', ''
+          $appVersion = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ($tagVersion -ne $appVersion) {
+            throw "Tag $env:GITHUB_REF_NAME does not match tauri.conf.json version $appVersion"
+          }
+          Write-Host "Tag $env:GITHUB_REF_NAME matches version $appVersion"
+
       - name: Build
         run: npm run tauri build
 
