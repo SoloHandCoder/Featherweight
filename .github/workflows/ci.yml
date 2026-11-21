@@ -23,5 +23,5 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm test
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: cargo test --manifest-path src-tauri/Cargo.toml -- --include-ignored
       - run: npm run tauri build -- --no-bundle

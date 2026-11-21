@@ -6,6 +6,8 @@ use crate::model::{Hive, RegData, StartType};
 
 #[cfg(test)]
 pub mod fake;
+#[cfg(windows)]
+pub mod windows;
 
 #[derive(thiserror::Error, Debug)]
 pub enum SysError {

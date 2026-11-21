@@ -22,6 +22,8 @@ test = false
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+winreg = "0.55"
+regex = "1"
 
 [dependencies]
 tauri = { version = "2", features = [] }
@@ -31,6 +33,7 @@ toml = "0.8"
 thiserror = "2"
 include_dir = "0.7"
 time = { version = "0.3", features = ["formatting", "macros"] }
+regex = "1"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
@@ -47,10 +50,13 @@ strip = true
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.61", features = [
     "Wdk_System_SystemServices",
+    "Win32_Foundation",
     "Win32_Security",
     "Win32_System_Diagnostics_ToolHelp",
     "Win32_System_Power",
     "Win32_System_RemoteDesktop",
+    "Win32_System_Services",
     "Win32_System_SystemInformation",
     "Win32_System_Threading",
 ] }
+winreg = "0.56"
