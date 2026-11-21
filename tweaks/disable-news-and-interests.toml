@@ -1,0 +1,16 @@
+id = "disable-news-and-interests"
+title = "Turn off News and interests"
+description = "Removes the weather and news feed from the taskbar. Nothing else on the taskbar changes."
+section = "remove"
+level = "safe"
+presets = ["everyday", "gaming"]
+# Windows 10 only. The Windows 11 equivalent is disable-widgets.
+max_build = 21999
+
+# Group Policy "Enable news and interests on the taskbar".
+[[actions]]
+type = "registry"
+hive = "hklm"
+path = 'SOFTWARE\Policies\Microsoft\Windows\Windows Feeds'
+name = "EnableFeeds"
+value = { dword = 0 }

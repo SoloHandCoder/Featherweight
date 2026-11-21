@@ -45,7 +45,8 @@ Every tweak is a small TOML file in [`tweaks/`](tweaks). The lists below come fr
 | Stop Windows installing suggested apps | Safe | Everyday, Gaming |
 | Turn off Copilot in Windows | Safe | Everyday, Gaming |
 | Turn off Recall | Safe | Everyday, Gaming |
-| Turn off Widgets and News | Safe | Everyday, Gaming |
+| Turn off Widgets and News (Windows 11) | Safe | Everyday, Gaming |
+| Turn off News and interests (Windows 10) | Safe | Everyday, Gaming |
 | No Bing web results in Start search | Safe | Everyday, Gaming |
 | No ads or suggestions in Start and Settings | Safe | Everyday, Gaming |
 | No tips or ads on the lock screen | Safe | Everyday, Gaming |

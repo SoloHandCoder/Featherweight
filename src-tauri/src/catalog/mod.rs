@@ -414,6 +414,7 @@ mod tests {
         "disable-copilot",
         "disable-recall",
         "disable-widgets",
+        "disable-news-and-interests",
         "no-bing-in-start",
         "no-start-ads",
         "no-lockscreen-ads",
@@ -460,6 +461,7 @@ mod tests {
             ("disable-copilot", Section::Remove, Safe, None, both),
             ("disable-recall", Section::Remove, Safe, None, both),
             ("disable-widgets", Section::Remove, Safe, None, both),
+            ("disable-news-and-interests", Section::Remove, Safe, None, both),
             ("no-bing-in-start", Section::Remove, Safe, None, both),
             ("no-start-ads", Section::Remove, Safe, None, both),
             ("no-lockscreen-ads", Section::Remove, Safe, None, both),
@@ -487,6 +489,23 @@ mod tests {
             assert_eq!(t.presets, presets.to_vec(), "{id} presets");
         }
         assert_eq!(c.get("disable-recall").unwrap().min_build, Some(26100));
+    }
+
+    /// Windows 11 blocks writing the Windows 10 "Windows Feeds" policy, so the
+    /// Widgets (Win 11) and News and interests (Win 10) tweaks must never both
+    /// apply on one PC.
+    #[test]
+    fn widgets_tweaks_split_by_windows_version() {
+        let c = Catalog::bundled();
+        let w11 = c.get("disable-widgets").unwrap();
+        let w10 = c.get("disable-news-and-interests").unwrap();
+        assert_eq!((w11.min_build, w11.max_build), (Some(22000), None));
+        assert_eq!((w10.min_build, w10.max_build), (None, Some(21999)));
+        let touches = |t: &TweakDef, needle: &str| {
+            t.actions.iter().any(|a| matches!(a, ActionDef::Registry { path, .. } if path.contains(needle)))
+        };
+        assert!(touches(w11, r"Microsoft\Dsh") && !touches(w11, "Windows Feeds"));
+        assert!(touches(w10, "Windows Feeds") && !touches(w10, r"Microsoft\Dsh"));
     }
 
     #[test]
