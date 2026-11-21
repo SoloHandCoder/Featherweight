@@ -180,6 +180,35 @@ export function packageTitle(pkg: string): string {
     .replace(/([0-9A-Z])([A-Z][a-z])/g, "$1 $2");
 }
 
+/** Tweaks whose way back isn't the Store, by id. */
+const IRREVERSIBLE_NOTES: Record<string, string> = {
+  "remove-onedrive": "Undo reinstalls OneDrive. You sign in to it again afterwards.",
+};
+
+/** What getting an irreversible tweak's change back takes, for its confirmation row. */
+export function irreversibleNote(t: TweakView): string {
+  const note = IRREVERSIBLE_NOTES[t.id];
+  if (note) return note;
+  if (t.changes.some((c) => appName(c) !== null)) return "You can reinstall these apps from the Microsoft Store.";
+  return "Undo may not put this back exactly as it was.";
+}
+
+/** The note shown while an applied irreversible tweak's switch is turned off. */
+export function turnOffNote(t: TweakView): string {
+  return (
+    IRREVERSIBLE_NOTES[t.id] ??
+    "Turning this off won't bring removed apps back — reinstall them from the Microsoft Store."
+  );
+}
+
+/** Message and button of the "can't be undone" question: app removals, files, or both. */
+export function irreversibleCopy(tweaks: boolean, files: boolean): { message: string; confirm: string } {
+  if (tweaks && files)
+    return { message: "Undo can't fully put these back, and deleted files are gone.", confirm: "Remove and clean" };
+  if (files) return { message: "Undo can't bring deleted files back.", confirm: "Clean" };
+  return { message: "Undo can't fully put these back.", confirm: "Remove" };
+}
+
 export interface ResultItem {
   title: string;
   detail?: string;

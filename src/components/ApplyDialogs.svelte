@@ -4,7 +4,7 @@
   // Pages call `askRestore` / `askIrreversible` through bind:this and pass
   // them to runApply.
   import ConfirmDialog from "./ConfirmDialog.svelte";
-  import { appName, type RestoreChoice } from "../lib/applyFlow";
+  import { appName, irreversibleCopy as copyFor, irreversibleNote, type RestoreChoice } from "../lib/applyFlow";
   import { formatBytes } from "../lib/format";
   import type { CleanupTarget, RestorePointOutcome, TweakView } from "../lib/types";
 
@@ -73,7 +73,7 @@
     return ids.map((id) => {
       const t = tweaks.find((x) => x.id === id);
       const apps = (t?.changes ?? []).map(appName).filter((n): n is string => n !== null);
-      return { id, title: t?.title ?? id, apps };
+      return { id, title: t?.title ?? id, apps, note: t ? irreversibleNote(t) : "" };
     });
   }
 
@@ -85,17 +85,8 @@
   const cleanupTotal = $derived(cleanupQ.reduce((n, t) => n + t.bytes, 0));
 
   /** Message and button for what the question covers: app removals, files, or both. */
-  const irreversibleCopy = $derived.by(() => {
-    const apps = irreversibleQ.length > 0;
-    const files = cleanupQ.length > 0;
-    if (apps && files)
-      return {
-        message: "Undo can't put these back. You can reinstall most apps from the Microsoft Store; deleted files are gone.",
-        confirm: "Remove and clean",
-      };
-    if (files) return { message: "Undo can't bring deleted files back.", confirm: "Clean" };
-    return { message: "Undo can't put these back. You can reinstall most apps from the Microsoft Store.", confirm: "Remove" };
-  });
+  // Each tweak's own way back (Store, OneDrive setup, ...) is on its row.
+  const irreversibleCopy = $derived(copyFor(irreversibleQ.length > 0, cleanupQ.length > 0));
 </script>
 
 <ConfirmDialog
@@ -124,6 +115,7 @@
   {#each irreversibleQ as t (t.id)}
     <div class="irr">
       <h3>{t.title}</h3>
+      {#if t.note}<p class="note">{t.note}</p>{/if}
       {#if t.apps.length > 0}
         <ul class="apps">
           {#each t.apps as name (name)}<li>{name}</li>{/each}
@@ -148,6 +140,12 @@
     margin: 0 0 var(--space-2);
     font-size: var(--text-sm);
     font-weight: var(--weight-semibold);
+  }
+
+  .note {
+    margin: 0 0 var(--space-2);
+    color: var(--muted);
+    font-size: var(--text-sm);
   }
 
   .total {

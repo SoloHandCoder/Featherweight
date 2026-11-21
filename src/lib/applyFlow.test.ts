@@ -4,6 +4,9 @@ import {
   combineGroups,
   groupApplyReport,
   groupUndoReport,
+  irreversibleCopy,
+  irreversibleNote,
+  turnOffNote,
   mergeUndoReport,
   OTHER_ACCOUNT_DETAIL,
   planApply,
@@ -269,6 +272,31 @@ describe("appName", () => {
     expect(appName('Remove app "king.com.CandyCrushSaga" (all users)')).toBe("Candy Crush Saga");
     expect(appName('Remove app "Microsoft.Microsoft3DViewer"')).toBe("Microsoft 3D Viewer");
     expect(appName("HKLM\\Software\\X = 1 (DWORD)")).toBeNull();
+  });
+});
+
+describe("irreversible wording", () => {
+  const apps = tweak("junk", true, ['Remove app "king.com.CandyCrushSaga" (all users)']);
+  const onedrive = tweak("remove-onedrive", true, ["PowerShell: ..."]);
+
+  it("names the Store only for tweaks that remove Store apps", () => {
+    expect(irreversibleNote(apps)).toBe("You can reinstall these apps from the Microsoft Store.");
+    expect(irreversibleNote(onedrive)).toBe("Undo reinstalls OneDrive. You sign in to it again afterwards.");
+    expect(irreversibleNote(tweak("other", true))).toBe("Undo may not put this back exactly as it was.");
+    expect(irreversibleNote(onedrive)).not.toContain("Store");
+    expect(turnOffNote(onedrive)).toBe("Undo reinstalls OneDrive. You sign in to it again afterwards.");
+    expect(turnOffNote(apps)).toContain("Microsoft Store");
+  });
+
+  it("keeps the dialog message free of per-tweak claims", () => {
+    expect(irreversibleCopy(true, false)).toEqual({ message: "Undo can't fully put these back.", confirm: "Remove" });
+    expect(irreversibleCopy(true, true)).toEqual({
+      message: "Undo can't fully put these back, and deleted files are gone.",
+      confirm: "Remove and clean",
+    });
+    expect(irreversibleCopy(false, true)).toEqual({ message: "Undo can't bring deleted files back.", confirm: "Clean" });
+    for (const [a, f] of [[true, false], [true, true], [false, true]] as const)
+      expect(irreversibleCopy(a, f).message).not.toContain("Microsoft Store");
   });
 });
 

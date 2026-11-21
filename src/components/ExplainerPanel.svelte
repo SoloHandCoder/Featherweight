@@ -2,6 +2,7 @@
   // What the selected tweak does, exactly: its description, one line per
   // changed value, its status, and the per-tweak controls.
   import { CircleAlert, RotateCcw, Undo2 } from "@lucide/svelte";
+  import { turnOffNote } from "../lib/applyFlow";
   import type { TweakView } from "../lib/types";
 
   interface Props {
@@ -98,7 +99,7 @@
     {#if offIrreversible}
       <div class="changed" role="status">
         <CircleAlert size={16} strokeWidth={1.75} aria-hidden="true" />
-        <p>Turning this off won't bring removed apps back — reinstall them from the Microsoft Store.</p>
+        <p>{turnOffNote(tweak)}</p>
       </div>
     {/if}
 
