@@ -1,0 +1,118 @@
+<style>
+  .fw{font-family:"Segoe UI",system-ui,sans-serif;background:#0f1115;color:#e7e9ee;border-radius:10px;overflow:hidden;font-size:11px;line-height:1.35;border:1px solid #262a33;height:330px;display:flex;flex-direction:column}
+  .fw .bar{display:flex;align-items:center;gap:6px;padding:7px 10px;background:#15181e;border-bottom:1px solid #232730;font-weight:600}
+  .fw .logo{width:14px;height:14px;border-radius:4px;background:linear-gradient(135deg,#7dd3fc,#a78bfa)}
+  .fw .dots{margin-left:auto;color:#5b6170;letter-spacing:4px}
+  .fw .muted{color:#8a90a0}
+  .fw .acc{color:#7dd3fc}
+  .fw .btn{background:linear-gradient(135deg,#38bdf8,#818cf8);color:#0b0d12;font-weight:700;border-radius:8px;padding:7px 12px;text-align:center}
+  .fw .ghost{border:1px solid #2c313c;border-radius:8px;padding:6px 10px;text-align:center;color:#c9cdd6}
+  .fw .tile{background:#171a21;border:1px solid #242833;border-radius:8px;padding:8px}
+  .fw .pill{display:inline-block;padding:1px 6px;border-radius:99px;font-size:9px;font-weight:600}
+  .fw .safe{background:#123524;color:#6ee7a8}
+  .fw .adv{background:#3a2a12;color:#fbbf6b}
+  .fw .tog{width:22px;height:12px;border-radius:99px;background:#38bdf8;position:relative;flex:none}
+  .fw .tog:after{content:"";position:absolute;right:2px;top:2px;width:8px;height:8px;border-radius:50%;background:#0b0d12}
+  .fw .tog.off{background:#2c313c}.fw .tog.off:after{left:2px;right:auto;background:#6b7180}
+  .fw .row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid #1e222a}
+</style>
+
+<h2>How should Featherweight's main screen feel?</h2>
+<p class="subtitle">Three directions for the first thing people see. Click the one that feels closest. You can mix parts in the terminal ("A's sidebar with B's big button").</p>
+
+<div class="cards">
+
+  <!-- A: Dashboard -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="fw">
+        <div class="bar"><div class="logo"></div>Featherweight<span class="dots">● ● ●</span></div>
+        <div style="display:flex;flex:1;min-height:0">
+          <div style="width:92px;background:#13161b;border-right:1px solid #232730;padding:8px 6px;display:flex;flex-direction:column;gap:3px">
+            <div style="background:#1d2230;border-radius:6px;padding:5px 7px" class="acc">⌂ Home</div>
+            <div style="padding:5px 7px" class="muted">🗑 Remove</div>
+            <div style="padding:5px 7px" class="muted">⚙ Background</div>
+            <div style="padding:5px 7px" class="muted">🎮 Gaming</div>
+            <div style="padding:5px 7px" class="muted">🧹 Cleanup</div>
+            <div style="margin-top:auto;padding:5px 7px" class="muted">↺ Undo all</div>
+          </div>
+          <div style="flex:1;padding:10px;display:flex;flex-direction:column;gap:8px">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+              <div class="tile"><div class="muted">Startup apps</div><div style="font-size:16px;font-weight:700">14</div></div>
+              <div class="tile"><div class="muted">Background svcs</div><div style="font-size:16px;font-weight:700">41</div></div>
+              <div class="tile"><div class="muted">Junk files</div><div style="font-size:16px;font-weight:700">6.2 GB</div></div>
+            </div>
+            <div class="muted" style="font-weight:600">Pick a preset</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <div class="tile" style="border-color:#38bdf8"><b>⚡ Everyday</b><div class="muted">Faster, quieter PC. Safe for anyone.</div></div>
+              <div class="tile"><b>🎮 Gaming</b><div class="muted">Everyday + max FPS tweaks.</div></div>
+            </div>
+            <div style="margin-top:auto;display:flex;gap:6px"><div class="btn" style="flex:1">Apply Everyday (23 tweaks)</div><div class="ghost">Review</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Dashboard</h3>
+      <p>Sidebar with each area, stats up top, presets on Home. Feels like a full app with room to grow. Best for screenshots.</p>
+    </div>
+  </div>
+
+  <!-- B: One button -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="fw">
+        <div class="bar"><div class="logo"></div>Featherweight<span class="dots">● ● ●</span></div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:14px;text-align:center">
+          <div style="display:flex;background:#171a21;border:1px solid #242833;border-radius:99px;padding:3px">
+            <div style="background:#1d2230;border-radius:99px;padding:4px 12px" class="acc">⚡ Everyday</div>
+            <div style="padding:4px 12px" class="muted">🎮 Gaming</div>
+            <div style="padding:4px 12px" class="muted">✎ Custom</div>
+          </div>
+          <div style="width:118px;height:118px;border-radius:50%;background:radial-gradient(circle at 30% 30%,#7dd3fc,#818cf8);display:flex;align-items:center;justify-content:center;color:#0b0d12;font-weight:800;font-size:15px;box-shadow:0 0 40px #6366f155">Optimize</div>
+          <div class="muted">23 safe tweaks · frees ~6.2 GB · restore point first</div>
+          <div class="acc" style="font-size:10px">See exactly what will change ▾</div>
+          <div class="muted" style="font-size:10px">↺ Undo everything</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. One big button</h3>
+      <p>Pick a mode, hit Optimize. Details stay hidden until you open them. Friendliest for non-tech people, but less for power users to dig into.</p>
+    </div>
+  </div>
+
+  <!-- C: Checklist -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="fw">
+        <div class="bar"><div class="logo"></div>Featherweight
+          <span style="margin-left:14px;display:flex;gap:10px;font-weight:400"><span class="acc" style="border-bottom:2px solid #38bdf8">Remove</span><span class="muted">Background</span><span class="muted">Gaming</span><span class="muted">Cleanup</span></span>
+          <span class="dots">● ● ●</span></div>
+        <div style="display:flex;flex:1;min-height:0">
+          <div style="flex:1.3;overflow:hidden">
+            <div class="row"><div class="tog"></div><span style="flex:1">Remove Copilot</span><span class="pill safe">SAFE</span></div>
+            <div class="row" style="background:#171c27"><div class="tog"></div><span style="flex:1">Turn off Start menu ads</span><span class="pill safe">SAFE</span></div>
+            <div class="row"><div class="tog"></div><span style="flex:1">Disable Recall</span><span class="pill safe">SAFE</span></div>
+            <div class="row"><div class="tog off"></div><span style="flex:1">Uninstall OneDrive</span><span class="pill adv">ADVANCED</span></div>
+            <div class="row"><div class="tog"></div><span style="flex:1">Remove Candy Crush etc.</span><span class="pill safe">SAFE</span></div>
+            <div class="row"><div class="tog off"></div><span style="flex:1">Remove Xbox apps</span><span class="pill adv">ADVANCED</span></div>
+            <div style="padding:8px;display:flex;gap:6px"><div class="btn" style="flex:1">Apply 4 changes</div></div>
+          </div>
+          <div style="flex:1;border-left:1px solid #232730;padding:10px;background:#13161b">
+            <b>Turn off Start menu ads</b>
+            <p class="muted" style="margin:6px 0">Stops Windows showing "suggested" apps and promos in Start and Settings.</p>
+            <div class="muted" style="font-size:10px">What it changes</div>
+            <div style="font-family:Consolas,monospace;font-size:9px;color:#9fb3c8;background:#0f1115;border-radius:5px;padding:5px;margin-top:3px">ContentDeliveryManager<br>SystemPaneSuggestions = 0</div>
+            <div class="acc" style="margin-top:8px;font-size:10px">↺ Undo this one</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Checklist + explainer</h3>
+      <p>Tabs of toggles with SAFE/ADVANCED labels, and a side panel explaining each tweak and its exact change. Power-user friendly and very transparent.</p>
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,98 @@
+<style>
+  .fw{font-family:"Segoe UI",system-ui,sans-serif;background:#0f1115;color:#e7e9ee;border-radius:10px;overflow:hidden;font-size:12px;line-height:1.4;border:1px solid #262a33;height:400px;display:flex;flex-direction:column}
+  .fw .bar{display:flex;align-items:center;gap:6px;padding:8px 12px;background:#15181e;border-bottom:1px solid #232730;font-weight:600}
+  .fw .logo{width:15px;height:15px;border-radius:4px;background:linear-gradient(135deg,#7dd3fc,#a78bfa)}
+  .fw .dots{margin-left:auto;color:#5b6170;letter-spacing:4px}
+  .fw .muted{color:#8a90a0}
+  .fw .acc{color:#7dd3fc}
+  .fw .btn{background:linear-gradient(135deg,#38bdf8,#818cf8);color:#0b0d12;font-weight:700;border-radius:8px;padding:8px 12px;text-align:center}
+  .fw .ghost{border:1px solid #2c313c;border-radius:8px;padding:7px 10px;text-align:center;color:#c9cdd6}
+  .fw .tile{background:#171a21;border:1px solid #242833;border-radius:8px;padding:9px}
+  .fw .pill{display:inline-block;padding:1px 6px;border-radius:99px;font-size:9px;font-weight:600}
+  .fw .safe{background:#123524;color:#6ee7a8}
+  .fw .adv{background:#3a2a12;color:#fbbf6b}
+  .fw .tog{width:24px;height:13px;border-radius:99px;background:#38bdf8;position:relative;flex:none}
+  .fw .tog:after{content:"";position:absolute;right:2px;top:2px;width:9px;height:9px;border-radius:50%;background:#0b0d12}
+  .fw .tog.off{background:#2c313c}.fw .tog.off:after{left:2px;right:auto;background:#6b7180}
+  .fw .row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid #1e222a}
+  .fw .side{width:110px;background:#13161b;border-right:1px solid #232730;padding:9px 7px;display:flex;flex-direction:column;gap:3px;flex:none}
+  .fw .nav{padding:6px 8px;border-radius:6px;color:#8a90a0}
+  .fw .nav.on{background:#1d2230;color:#7dd3fc}
+</style>
+
+<h2>A + C combined: does this feel right?</h2>
+<p class="subtitle">Left is the Home screen (A). Right is what you see after clicking "Remove" in the sidebar (C's switches + explainer). Background, Gaming and Cleanup would all work like the right side.</p>
+
+<div class="split">
+
+  <div class="mockup">
+    <div class="mockup-header">Home</div>
+    <div class="mockup-body">
+      <div class="fw">
+        <div class="bar"><div class="logo"></div>Featherweight<span class="dots">● ● ●</span></div>
+        <div style="display:flex;flex:1;min-height:0">
+          <div class="side">
+            <div class="nav on">⌂ Home</div>
+            <div class="nav">🗑 Remove</div>
+            <div class="nav">⚙ Background</div>
+            <div class="nav">🎮 Gaming</div>
+            <div class="nav">🧹 Cleanup</div>
+            <div class="nav" style="margin-top:auto">↺ Undo all</div>
+          </div>
+          <div style="flex:1;padding:12px;display:flex;flex-direction:column;gap:9px">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px">
+              <div class="tile"><div class="muted">Startup apps</div><div style="font-size:18px;font-weight:700">14</div></div>
+              <div class="tile"><div class="muted">Background svcs</div><div style="font-size:18px;font-weight:700">41</div></div>
+              <div class="tile"><div class="muted">Junk files</div><div style="font-size:18px;font-weight:700">6.2 GB</div></div>
+            </div>
+            <div class="muted" style="font-weight:600">Pick a preset</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">
+              <div class="tile" style="border-color:#38bdf8"><b>⚡ Everyday</b><div class="muted">Faster, quieter PC. Only SAFE tweaks.</div></div>
+              <div class="tile"><b>🎮 Gaming</b><div class="muted">Everyday + FPS and latency tweaks.</div></div>
+            </div>
+            <div class="tile" style="display:flex;align-items:center;gap:8px"><span>🛟</span><span class="muted" style="flex:1">A restore point is made before the first change.</span></div>
+            <div style="margin-top:auto;display:flex;gap:7px"><div class="btn" style="flex:1">Apply Everyday (23 tweaks)</div><div class="ghost">Review list</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Remove section</div>
+    <div class="mockup-body">
+      <div class="fw">
+        <div class="bar"><div class="logo"></div>Featherweight<span class="dots">● ● ●</span></div>
+        <div style="display:flex;flex:1;min-height:0">
+          <div class="side">
+            <div class="nav">⌂ Home</div>
+            <div class="nav on">🗑 Remove</div>
+            <div class="nav">⚙ Background</div>
+            <div class="nav">🎮 Gaming</div>
+            <div class="nav">🧹 Cleanup</div>
+            <div class="nav" style="margin-top:auto">↺ Undo all</div>
+          </div>
+          <div style="flex:1.25;display:flex;flex-direction:column;min-width:0">
+            <div class="row" style="border:none"><span class="muted" style="flex:1">6 items · 4 selected</span><span class="pill safe">SAFE</span><span class="pill adv">ADVANCED</span></div>
+            <div class="row"><div class="tog"></div><span style="flex:1">Remove Copilot</span><span class="pill safe">SAFE</span></div>
+            <div class="row" style="background:#171c27"><div class="tog"></div><span style="flex:1">Turn off Start menu ads</span><span class="pill safe">SAFE</span></div>
+            <div class="row"><div class="tog"></div><span style="flex:1">Disable Recall</span><span class="pill safe">SAFE</span></div>
+            <div class="row"><div class="tog off"></div><span style="flex:1">Uninstall OneDrive</span><span class="pill adv">ADV</span></div>
+            <div class="row"><div class="tog"></div><span style="flex:1">Remove Candy Crush etc.</span><span class="pill safe">SAFE</span></div>
+            <div class="row"><div class="tog off"></div><span style="flex:1">Remove Xbox apps</span><span class="pill adv">ADV</span></div>
+            <div style="padding:9px;margin-top:auto"><div class="btn">Apply 4 changes</div></div>
+          </div>
+          <div style="flex:1;border-left:1px solid #232730;padding:11px;background:#13161b;min-width:0">
+            <b>Turn off Start menu ads</b>
+            <p class="muted" style="margin:6px 0">Stops Windows showing "suggested" apps and promos in Start and Settings.</p>
+            <div class="muted" style="font-size:10px">What it changes</div>
+            <div style="font-family:Consolas,monospace;font-size:9px;color:#9fb3c8;background:#0f1115;border-radius:5px;padding:6px;margin-top:3px;word-break:break-all">HKCU\…\ContentDeliveryManager<br>SystemPaneSuggestions = 0</div>
+            <div class="muted" style="font-size:10px;margin-top:8px">Status: <span style="color:#6ee7a8">Applied</span></div>
+            <div class="acc" style="margin-top:6px;font-size:11px">↺ Undo this one</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
