@@ -132,3 +132,47 @@ fn active_power_scheme_is_guid() {
 fn powershell_echo() {
     assert_eq!(WindowsSystem.run_powershell("Write-Output 1").unwrap(), "1");
 }
+
+#[test]
+#[ignore]
+fn reg_values_lists_run_key_read_only() {
+    let sys = WindowsSystem;
+    let vals = sys
+        .reg_values(Hive::Hkcu, r"Software\Microsoft\Windows\CurrentVersion\Run")
+        .unwrap();
+    println!("{} values", vals.len());
+    // A missing key is an empty list, not an error.
+    assert!(sys.reg_values(Hive::Hkcu, r"Software\FeatherweightNoSuchKey").unwrap().is_empty());
+}
+
+#[test]
+#[ignore]
+fn reg_roundtrip_expand_string() {
+    let _c = Cleanup;
+    let mut sys = WindowsSystem;
+    let v = RegData::ExpandString(r"%APPDATA%\x.exe".into());
+    sys.reg_set(Hive::Hkcu, KEY, "E", Some(&v)).unwrap();
+    // Type is preserved (not downgraded to REG_SZ) and nothing is expanded.
+    assert_eq!(sys.reg_get(Hive::Hkcu, KEY, "E").unwrap(), Some(v.clone()));
+    assert!(sys.reg_values(Hive::Hkcu, KEY).unwrap().contains(&("E".to_string(), v)));
+    sys.reg_set(Hive::Hkcu, KEY, "E", None).unwrap();
+    assert_eq!(sys.reg_get(Hive::Hkcu, KEY, "E").unwrap(), None);
+}
+
+#[test]
+#[ignore]
+fn unsupported_registry_type_is_other_error() {
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_WRITE, REG_MULTI_SZ};
+    let _c = Cleanup;
+    let hkcu = winreg::RegKey::predef(HKEY_CURRENT_USER);
+    let (k, _) = hkcu.create_subkey_with_flags(KEY, KEY_WRITE).unwrap();
+    k.set_raw_value(
+        "M",
+        &winreg::RegValue { bytes: vec![0, 0, 0, 0].into(), vtype: REG_MULTI_SZ },
+    )
+    .unwrap();
+    let sys = WindowsSystem;
+    assert!(matches!(sys.reg_get(Hive::Hkcu, KEY, "M"), Err(SysError::Other(_))));
+    // reg_values skips it rather than failing.
+    assert!(sys.reg_values(Hive::Hkcu, KEY).unwrap().is_empty());
+}

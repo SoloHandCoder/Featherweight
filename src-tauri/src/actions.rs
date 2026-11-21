@@ -148,6 +148,7 @@ pub fn describe(a: &ActionDef) -> String {
                 Some(RegData::Dword(n)) => format!("{loc} = {n} (DWORD)"),
                 Some(RegData::Qword(n)) => format!("{loc} = {n} (QWORD)"),
                 Some(RegData::String(s)) => format!("{loc} = {s} (String)"),
+                Some(RegData::ExpandString(s)) => format!("{loc} = {s} (ExpandString)"),
                 Some(RegData::Binary(b)) => {
                     let hex: Vec<String> = b.iter().map(|x| format!("{x:02x}")).collect();
                     format!("{loc} = {} (Binary)", hex.join(" "))

@@ -29,6 +29,9 @@ pub trait System {
         name: &str,
         value: Option<&RegData>,
     ) -> Result<(), SysError>;
+    /// All values directly under a key; a missing key yields an empty list and
+    /// values of unsupported types are skipped.
+    fn reg_values(&self, hive: Hive, path: &str) -> Result<Vec<(String, RegData)>, SysError>;
     /// `None` = service absent.
     fn service_start(&self, name: &str) -> Result<Option<StartType>, SysError>;
     /// `Disabled` also stops the service.

@@ -28,7 +28,7 @@ use winreg::RegKey;
 use winreg::RegValue;
 use winreg::enums::{
     HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_SET_VALUE, KEY_WOW64_64KEY, KEY_WRITE,
-    REG_BINARY, REG_DWORD, REG_QWORD, REG_SZ,
+    REG_BINARY, REG_DWORD, REG_EXPAND_SZ, REG_QWORD, REG_SZ,
 };
 
 use super::{SysError, System};
@@ -278,6 +278,7 @@ fn reg_to_data(v: RegValue) -> Result<RegData, SysError> {
         REG_DWORD => RegData::Dword(u32::from_reg_value(&v).map_err(bad)?),
         REG_QWORD => RegData::Qword(u64::from_reg_value(&v).map_err(bad)?),
         REG_SZ => RegData::String(String::from_reg_value(&v).map_err(bad)?),
+        REG_EXPAND_SZ => RegData::ExpandString(String::from_reg_value(&v).map_err(bad)?),
         REG_BINARY => RegData::Binary(v.bytes.to_vec()),
         other => {
             return Err(SysError::Other(format!("unsupported registry type {other:?}")));
@@ -291,6 +292,7 @@ fn data_to_reg(d: &RegData) -> RegValue<'_> {
         RegData::Dword(n) => n.to_reg_value(),
         RegData::Qword(n) => n.to_reg_value(),
         RegData::String(s) => s.to_reg_value(),
+        RegData::ExpandString(s) => RegValue { vtype: REG_EXPAND_SZ, ..s.to_reg_value() },
         RegData::Binary(b) => RegValue { bytes: b.clone().into(), vtype: REG_BINARY },
     }
 }
@@ -601,6 +603,22 @@ impl System for WindowsSystem {
     fn run_powershell(&mut self, script: &str) -> Result<String, SysError> {
         let o = run_ps(script)?;
         if o.ok { Ok(o.stdout.trim().to_string()) } else { Err(tool_err("powershell", &o, false)) }
+    }
+
+    fn reg_values(&self, hive: Hive, path: &str) -> Result<Vec<(String, RegData)>, SysError> {
+        let key = match root(hive).open_subkey_with_flags(path, KEY_READ | KEY_WOW64_64KEY) {
+            Ok(k) => k,
+            Err(e) if is_missing(&e) => return Ok(Vec::new()),
+            Err(e) => return Err(map_io(e, &format!("open {path}"))),
+        };
+        let mut out = Vec::new();
+        for item in key.enum_values() {
+            let (name, v) = item.map_err(|e| map_io(e, &format!("enumerate {path}")))?;
+            if let Ok(d) = reg_to_data(v) {
+                out.push((name, d));
+            }
+        }
+        Ok(out)
     }
 }
 

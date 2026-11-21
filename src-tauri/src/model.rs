@@ -16,6 +16,8 @@ pub enum RegData {
     Dword(u32),
     Qword(u64),
     String(String),
+    /// REG_EXPAND_SZ; stored verbatim, never expanded.
+    ExpandString(String),
     Binary(Vec<u8>),
 }
 
