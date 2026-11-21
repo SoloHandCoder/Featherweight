@@ -3,6 +3,7 @@
   import { TriangleAlert } from "lucide-svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import AccountBanner from "./components/AccountBanner.svelte";
+  import Home from "./pages/Home.svelte";
   import { app, navigate, refresh, type Page } from "./lib/state.svelte";
 
   const titles: Record<Page, string> = {
@@ -56,6 +57,9 @@
       </div>
     {/if}
 
+    {#if app.page === "home"}
+      <Home />
+    {/if}
   </main>
 </div>
 

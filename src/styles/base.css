@@ -10,6 +10,11 @@ body {
   height: 100%;
 }
 
+/* Dark native scrollbars and form controls. */
+html {
+  color-scheme: dark;
+}
+
 body {
   margin: 0;
   background: var(--bg);

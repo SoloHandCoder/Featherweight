@@ -2,7 +2,7 @@
 // Argument names are camelCase here; Tauri maps them to the Rust
 // snake_case parameters. Every call rejects with a `string` message.
 
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   ApplyReport,
@@ -71,5 +71,7 @@ export function runCleanup(ids: string[]): Promise<CleanupReport> {
 
 /** Subscribes to apply progress; call the returned function to stop. */
 export function onApplyProgress(cb: (p: Progress) => void): Promise<UnlistenFn> {
+  // Events need the Tauri runtime; in a plain browser there is nothing to hear.
+  if (!isTauri()) return Promise.resolve(() => {});
   return listen<Progress>(APPLY_PROGRESS, (e) => cb(e.payload));
 }
