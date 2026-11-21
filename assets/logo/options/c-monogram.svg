@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><defs><linearGradient id="fwcg" gradientUnits="userSpaceOnUse" x1="60" y1="236" x2="210" y2="24"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient></defs>
+  <g fill="url(#fwcg)">
+    <path d="M62 200 V78 C62 58 74 48 94 44 L206 22 C218 20 226 30 220 41 L200 74 C196 81 189 85 181 86 L168 88 L188 52 L154 93 L102 97 V200 L82 242 Z"/>
+    <path d="M102 128 L176 114 C187 112 194 121 188 131 L172 158 C168 164 162 167 156 168 L102 177 Z"/>
+  </g></svg>

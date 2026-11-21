@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256"><defs><linearGradient id="fwdg" gradientUnits="userSpaceOnUse" x1="0" y1="256" x2="256" y2="0"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#818cf8"/></linearGradient>
+    <mask id="fwdm" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="#fff"/>
+      <g transform="rotate(40 128 132)">
+        <path d="M128 30 C178 66 186 146 142 196 L114 196 C72 146 80 66 128 30 Z" fill="#000"/>
+        <rect x="119" y="186" width="18" height="50" rx="9" fill="#000"/>
+        <path d="M128 78 V190" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+        <path d="M122 150 L80 124" stroke="#fff" stroke-width="12" stroke-linecap="round"/>
+      </g>
+    </mask></defs>
+  <rect width="256" height="256" rx="58" fill="url(#fwdg)" mask="url(#fwdm)"/></svg>
