@@ -1,10 +1,13 @@
 id = "remove-junk-apps"
 title = "Remove preinstalled junk apps"
-description = "Removes games and apps that come preinstalled, like Candy Crush, Solitaire, Clipchamp and News, for every account on this PC. You can reinstall any of them from the Microsoft Store."
+description = "Removes games and apps that come preinstalled, like Candy Crush, Solitaire, Clipchamp and News, for every account on this PC. You can reinstall most of them from the Microsoft Store."
 section = "remove"
 level = "safe"
 presets = ["everyday", "gaming"]
 irreversible = true
+
+# Deliberately NOT removed: Microsoft.GetHelp (Windows 11 troubleshooters open
+# it) and Microsoft.MixedReality.Portal (Windows Mixed Reality headsets need it).
 
 [[actions]]
 type = "appx"
@@ -48,12 +51,6 @@ reinstall = "ms-windows-store://pdp/?ProductId=9WZDNCRFJ3Q2"
 
 [[actions]]
 type = "appx"
-package = "Microsoft.GetHelp"
-all_users = "always"
-reinstall = "ms-windows-store://pdp/?ProductId=9PKDZBMV1H3T"
-
-[[actions]]
-type = "appx"
 package = "Microsoft.Getstarted"
 all_users = "always"
 
@@ -79,12 +76,6 @@ type = "appx"
 package = "Microsoft.WindowsMaps"
 all_users = "always"
 reinstall = "ms-windows-store://pdp/?ProductId=9WZDNCRDTBVB"
-
-[[actions]]
-type = "appx"
-package = "Microsoft.MixedReality.Portal"
-all_users = "always"
-reinstall = "ms-windows-store://pdp/?ProductId=9NG1H8B3ZC7M"
 
 [[actions]]
 type = "appx"

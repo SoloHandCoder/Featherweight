@@ -1,6 +1,6 @@
 id = "disable-telemetry-services"
 title = "Turn off diagnostic data services"
-description = "Stops the background services that send usage and diagnostic data to Microsoft, and sets diagnostic data to the minimum. Windows Update and security updates keep working."
+description = "Stops the background services that send usage and diagnostic data to Microsoft, and sets diagnostic data to the minimum. Updates keep working, though a work or school PC may pick up its settings more slowly."
 section = "background"
 level = "safe"
 presets = ["everyday", "gaming"]

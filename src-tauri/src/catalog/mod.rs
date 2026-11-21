@@ -104,11 +104,18 @@ pub struct TweakDef {
     /// one off when this one is switched on.
     #[serde(default)]
     pub exclusive_with: Option<String>,
+    /// Overrides the per-user detection, for tweaks whose effect on the
+    /// signed-in account can't be seen from their actions (PowerShell).
+    #[serde(default)]
+    pub per_user: Option<bool>,
     pub actions: Vec<ActionDef>,
 }
 
 impl TweakDef {
     pub fn is_per_user(&self) -> bool {
+        if let Some(p) = self.per_user {
+            return p;
+        }
         self.actions.iter().any(|a| {
             matches!(
                 a,
@@ -602,14 +609,64 @@ mod tests {
 
     #[test]
     fn bundled_never_touches_defender_or_windows_update() {
-        let banned = ["windefend", "windows defender", "wuauserv", "windowsupdate", "usosvc", "waasmedicsvc", "securityhealth", "sense"];
+        // Whole service names / registry, task and package path segments.
+        let banned = [
+            "windefend", "windows defender", "microsoft defender", "wdnissvc", "sense",
+            "securityhealthservice", "wscsvc", "wuauserv", "windowsupdate", "usosvc",
+            "waasmedicsvc", "bits", "dosvc", "updateorchestrator",
+        ];
+        let segments = |s: &str| -> Vec<String> {
+            s.split('\\').filter(|p| !p.is_empty()).map(str::to_lowercase).collect()
+        };
         for t in &Catalog::bundled().tweaks {
             for a in &t.actions {
-                let s = format!("{a:?}").to_lowercase();
-                for b in banned {
-                    assert!(!s.contains(b), "{} touches {b}", t.id);
+                let names: Vec<String> = match a {
+                    ActionDef::Registry { path, name, .. } => {
+                        let mut v = segments(path);
+                        v.push(name.to_lowercase());
+                        v
+                    }
+                    ActionDef::Service { name, .. } => vec![name.to_lowercase()],
+                    ActionDef::ScheduledTask { path, .. } => segments(path),
+                    ActionDef::Appx { package, .. } => package.to_lowercase().split('.').map(String::from).collect(),
+                    ActionDef::PowerPlan { .. } | ActionDef::PowerShell { .. } => vec![],
+                };
+                for n in &names {
+                    assert!(!banned.contains(&n.as_str()), "{} touches {n}", t.id);
                 }
             }
         }
+    }
+
+    #[test]
+    fn per_user_override() {
+        let svc = "[[actions]]\ntype = \"service\"\nname = \"S\"\nstart = \"manual\"\n";
+        let forced = Catalog::from_strs(&[&tweak("a", "per_user = true", svc)]).unwrap();
+        assert!(forced.tweaks[0].is_per_user());
+        let off = Catalog::from_strs(&[&tweak("b", "per_user = false", HKCU_X)]).unwrap();
+        assert!(!off.tweaks[0].is_per_user());
+        let c = Catalog::bundled();
+        let od = c.get("remove-onedrive").unwrap();
+        assert_eq!(od.per_user, Some(true));
+        assert!(od.is_per_user());
+    }
+
+    #[test]
+    fn junk_list_excludes_packages_that_break_things() {
+        let c = Catalog::bundled();
+        let pkgs: Vec<&str> = c
+            .get("remove-junk-apps")
+            .unwrap()
+            .actions
+            .iter()
+            .filter_map(|a| match a {
+                ActionDef::Appx { package, .. } => Some(package.as_str()),
+                _ => None,
+            })
+            .collect();
+        for p in ["Microsoft.GetHelp", "Microsoft.MixedReality.Portal"] {
+            assert!(!pkgs.contains(&p), "{p} must not be in the SAFE junk list");
+        }
+        assert!(pkgs.contains(&"king.com.CandyCrushSaga"));
     }
 }

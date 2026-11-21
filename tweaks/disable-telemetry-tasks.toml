@@ -1,6 +1,6 @@
 id = "disable-telemetry-tasks"
 title = "Turn off diagnostic data tasks"
-description = "Turns off scheduled tasks that collect usage and app compatibility data in the background. Your apps and updates are not affected."
+description = "Turns off scheduled tasks that collect usage and app compatibility data in the background. Your apps keep working and Windows feature updates still install."
 section = "background"
 level = "safe"
 presets = ["everyday", "gaming"]
