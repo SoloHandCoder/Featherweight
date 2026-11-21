@@ -5,7 +5,8 @@
   // them to runApply.
   import ConfirmDialog from "./ConfirmDialog.svelte";
   import { appName, type RestoreChoice } from "../lib/applyFlow";
-  import type { RestorePointOutcome, TweakView } from "../lib/types";
+  import { formatBytes } from "../lib/format";
+  import type { CleanupTarget, RestorePointOutcome, TweakView } from "../lib/types";
 
   interface Props {
     tweaks: TweakView[];
@@ -16,15 +17,16 @@
 
   type Question =
     | { kind: "restore"; outcome: RestorePointOutcome; canEnable: boolean; resolve: (c: RestoreChoice) => void }
-    | { kind: "irreversible"; ids: string[]; resolve: (go: boolean) => void };
+    | { kind: "irreversible"; ids: string[]; cleanup: CleanupTarget[]; resolve: (go: boolean) => void };
   let question = $state<Question | null>(null);
 
   export function askRestore(outcome: RestorePointOutcome, canEnable: boolean): Promise<RestoreChoice> {
     return new Promise((resolve) => (question = { kind: "restore", outcome, canEnable, resolve }));
   }
 
-  export function askIrreversible(ids: string[]): Promise<boolean> {
-    return new Promise((resolve) => (question = { kind: "irreversible", ids, resolve }));
+  /** `cleanup`: a preset's cleanup targets, confirmed (or skipped) together with the ids. */
+  export function askIrreversible(ids: string[], cleanup: CleanupTarget[] = []): Promise<boolean> {
+    return new Promise((resolve) => (question = { kind: "irreversible", ids, cleanup, resolve }));
   }
 
   function answer(value: RestoreChoice) {
@@ -79,6 +81,21 @@
     question?.kind === "restore" ? restoreCopy(question.outcome, question.canEnable) : null,
   );
   const irreversibleQ = $derived(question?.kind === "irreversible" ? irreversibleDetail(question.ids) : []);
+  const cleanupQ = $derived(question?.kind === "irreversible" ? question.cleanup : []);
+  const cleanupTotal = $derived(cleanupQ.reduce((n, t) => n + t.bytes, 0));
+
+  /** Message and button for what the question covers: app removals, files, or both. */
+  const irreversibleCopy = $derived.by(() => {
+    const apps = irreversibleQ.length > 0;
+    const files = cleanupQ.length > 0;
+    if (apps && files)
+      return {
+        message: "Undo can't put these back. You can reinstall most apps from the Microsoft Store; deleted files are gone.",
+        confirm: "Remove and clean",
+      };
+    if (files) return { message: "Undo can't bring deleted files back.", confirm: "Clean" };
+    return { message: "Undo can't put these back. You can reinstall most apps from the Microsoft Store.", confirm: "Remove" };
+  });
 </script>
 
 <ConfirmDialog
@@ -96,8 +113,8 @@
 <ConfirmDialog
   open={question?.kind === "irreversible"}
   title="These can't be undone with one click"
-  message="Undo can't put these back. You can reinstall most apps from the Microsoft Store."
-  confirmLabel="Remove and clean"
+  message={irreversibleCopy.message}
+  confirmLabel={irreversibleCopy.confirm}
   cancelLabel="Skip these"
   cautious
   onconfirm={() => answer(true)}
@@ -114,6 +131,16 @@
       {/if}
     </div>
   {/each}
+  {#if cleanupQ.length > 0}
+    <div class="irr">
+      <h3>Junk files <span class="total num">{formatBytes(cleanupTotal)}</span></h3>
+      <ul class="files">
+        {#each cleanupQ as t (t.id)}
+          <li><span>{t.label}</span><span class="num">{formatBytes(t.bytes)}</span></li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
 </ConfirmDialog>
 
 <style>
@@ -121,6 +148,34 @@
     margin: 0 0 var(--space-2);
     font-size: var(--text-sm);
     font-weight: var(--weight-semibold);
+  }
+
+  .total {
+    margin-left: var(--space-1);
+    color: var(--muted);
+    font-weight: var(--weight-regular);
+  }
+
+  .files {
+    margin: 0;
+    padding: var(--space-3) var(--space-4);
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    background: var(--bg);
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+  }
+
+  .files li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .files .num {
+    color: var(--muted);
   }
 
   .apps {

@@ -9,8 +9,8 @@
     open: boolean;
     title: string;
     message?: string;
-    /** Plain list under the message, e.g. app names or cleanup sizes. */
-    items?: string[];
+    /** Plain list under the message; a pair puts its value (e.g. a size) on the right. */
+    items?: (string | { label: string; value: string })[];
     confirmLabel: string;
     cancelLabel?: string;
     /** Optional middle button, e.g. "Continue without one". */
@@ -52,7 +52,11 @@
     {#if items.length > 0}
       <ul class="items">
         {#each items as item, i (i)}
-          <li>{item}</li>
+          {#if typeof item === "string"}
+            <li>{item}</li>
+          {:else}
+            <li class="pair"><span>{item.label}</span><span class="num">{item.value}</span></li>
+          {/if}
         {/each}
       </ul>
     {/if}
@@ -100,6 +104,16 @@
     background: var(--bg);
     border-radius: var(--radius-sm);
     font-size: var(--text-sm);
+  }
+
+  .pair {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-4);
+  }
+
+  .pair .num {
+    color: var(--muted);
   }
 
   .actions {

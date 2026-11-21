@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { Gamepad2, LifeBuoy, ListChecks, Zap } from "lucide-svelte";
+  import { Gamepad2, LifeBuoy, ListChecks, Zap } from "@lucide/svelte";
   import StatTile from "../components/StatTile.svelte";
   import PresetCard from "../components/PresetCard.svelte";
   import LevelPill from "../components/LevelPill.svelte";
   import ApplyDialogs from "../components/ApplyDialogs.svelte";
   import ResultSummary from "../components/ResultSummary.svelte";
   import { backend } from "../lib/backend";
-  import { app, message, refresh, startBusy, stopBusy } from "../lib/state.svelte";
-  import { groupApplyReport, runApply, type ResultGroup } from "../lib/applyFlow";
+  import { app, changed, message, startBusy, stopBusy } from "../lib/state.svelte";
+  import { groupApplyReport, runPreset, type PresetResult, type ResultGroup } from "../lib/applyFlow";
   import { formatBytes } from "../lib/format";
   import type { Preset, Progress, TweakView } from "../lib/types";
 
@@ -24,7 +24,7 @@
   const busy = $derived(app.busy !== null);
   let nothingChanged = $state(false);
   let dialogs: ApplyDialogs | undefined = $state();
-  let phase = $state<"restore" | "apply" | null>(null);
+  let phase = $state<"restore" | "scan" | "apply" | "clean" | null>(null);
   let progress = $state<Progress | null>(null);
   let applyError = $state<string | null>(null);
   let applyButton = $state<HTMLButtonElement | null>(null);
@@ -43,12 +43,20 @@
   const alreadyDone = $derived(app.presets[preset].length - pending.length);
   const selected = $derived(pending.filter((t) => !excluded[preset].includes(t.id)).map((t) => t.id));
   const loaded = $derived(app.overview !== null);
+  /** Presets also clean up junk files; the scan at apply time decides exactly what. */
+  const junkBytes = $derived(app.overview?.stats.junkBytes ?? 0);
   const canApply = $derived(
-    app.backendAvailable && loaded && !app.overview?.journalError && selected.length > 0,
+    app.backendAvailable && loaded && !app.overview?.journalError && (selected.length > 0 || junkBytes > 0),
   );
 
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-  const applyLabel = $derived(`Apply ${presetName} (${plural(selected.length, "change", "changes")})`);
+  const applyLabel = $derived(
+    !loaded
+      ? `Apply ${presetName}`
+      : selected.length === 0 && junkBytes > 0
+        ? `Clean up with ${presetName}`
+        : `Apply ${presetName} (${plural(selected.length, "change", "changes")})`,
+  );
 
   function presetMeta(p: Preset): string | undefined {
     if (!loaded) return undefined;
@@ -74,6 +82,7 @@
   }
 
   function toggle(id: string) {
+    if (busy) return;
     const list = excluded[preset];
     excluded[preset] = list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
   }
@@ -82,22 +91,52 @@
     return t.status.kind === "partial" ? "Partly applied" : "Not applied";
   }
 
+  /** Result groups for a preset run: the tweak outcomes, then the cleanup. */
+  function presetGroups(r: PresetResult): ResultGroup[] {
+    const groups = r.apply ? groupApplyReport(r.apply, app.tweaks) : [];
+    // Cleanup is one line, so it goes first, above a possibly long list.
+    if (r.cleanup) {
+      const skipped = r.cleanup.skippedFiles;
+      groups.unshift({
+        label: "Cleaned up",
+        tone: "ok",
+        hideCount: true,
+        items: [
+          {
+            title: `Freed ${formatBytes(r.cleanup.freedBytes)}.`,
+            detail:
+              skipped > 0
+                ? `${plural(skipped, "file was", "files were")} in use and ${skipped === 1 ? "was" : "were"} skipped.`
+                : undefined,
+          },
+        ],
+      });
+    }
+    if (r.cleanupError)
+      groups.push({ label: "Cleanup failed", tone: "bad", hideCount: true, items: [{ title: r.cleanupError }] });
+    return groups;
+  }
+
   function summarize(groups: ResultGroup[], total: number, name: string) {
     const count = (label: string) => groups.find((g) => g.label === label)?.items.length ?? 0;
     const applied = count("Applied");
-    const failed = count("Failed");
+    const failed = count("Failed") + count("Cleanup failed");
+    const cleaned = count("Cleaned up") > 0;
     if (failed > 0) {
       return {
-        title: "Some changes didn't apply",
-        summary: `${applied} of ${total} applied. The ones that failed say why.`,
+        title: "Some changes didn't go through",
+        summary:
+          total > 0 ? `${applied} of ${total} applied. Each one that didn't says why.` : "The details say why.",
       };
     }
-    if (applied === 0) return { title: "Nothing needed changing", summary: "This PC already had these settings." };
+    if (applied === 0 && !cleaned)
+      return { title: "Nothing needed changing", summary: "This PC already had these settings." };
+    if (applied === 0) return { title: "Junk files cleaned up", summary: "Every setting was already in place." };
     return { title: `${plural(applied, "change", "changes")} applied`, summary: `${name} is set up on this PC.` };
   }
 
   async function apply() {
-    if (!canApply) return;
+    if (busy || !canApply) return;
     // Snapshot so switching cards mid-apply can't change what's shown.
     const name = presetName;
     const ids = selected;
@@ -107,7 +146,7 @@
     let unlisten: (() => void) | undefined;
     const api = backend.api;
     try {
-      const report = await runApply(ids, [], {
+      const run = await runPreset(ids, {
         tweaks: app.tweaks,
         ensureRestorePoint: () => {
           phase = "restore";
@@ -118,9 +157,13 @@
           phase = null;
           return dialogs!.askRestore(outcome, canEnable);
         },
-        confirmIrreversible: (irr) => {
+        scanCleanup: () => {
+          phase = "scan";
+          return api.scanCleanup();
+        },
+        confirmIrreversible: (irr, cleanup) => {
           phase = null;
-          return dialogs!.askIrreversible(irr);
+          return dialogs!.askIrreversible(irr, cleanup);
         },
         applyTweaks: async (chosen, allUsers) => {
           phase = "apply";
@@ -128,10 +171,14 @@
           unlisten = await api.onApplyProgress((p) => (progress = p));
           return api.applyTweaks(chosen, allUsers);
         },
+        runCleanup: (targets) => {
+          phase = "clean";
+          return api.runCleanup(targets);
+        },
       });
-      if (report) {
-        const groups = groupApplyReport(report, app.tweaks);
-        result = { ...summarize(groups, report.results.length, name), groups };
+      const groups = run ? presetGroups(run) : [];
+      if (run && groups.length > 0) {
+        result = { ...summarize(groups, run.apply?.results.length ?? 0, name), groups };
       } else {
         nothingChanged = true;
       }
@@ -143,7 +190,7 @@
       phase = null;
       progress = null;
     }
-    await refresh();
+    await changed();
   }
 </script>
 
@@ -182,59 +229,65 @@
         />
       {/each}
     </div>
+    {#if loaded && junkBytes > 0}
+      <p class="also">Both presets also clean up <span class="num">{formatBytes(junkBytes)}</span> of junk files.</p>
+    {/if}
   </section>
 
-  <div class="note" aria-live="polite">
-    {#if phase === "restore"}
-      <LifeBuoy size={16} strokeWidth={1.75} aria-hidden="true" />
-      <p>Making a restore point</p>
-    {:else if phase === "apply" && progress}
-      <div class="progress">
-        <p class="num">
-          {#if progress.done >= progress.total}
-            Finishing up
-          {:else}
-            Applying {progress.done + 1} of {progress.total}{progress.current ? ` — ${progress.current}` : ""}
-          {/if}
-        </p>
-        <div class="bar" aria-hidden="true">
-          <div class="fill" style:width="{progress.total ? (progress.done / progress.total) * 100 : 0}%"></div>
+  <div class="go">
+    <div class="actions">
+      <button
+        bind:this={applyButton}
+        type="button"
+        class="btn btn-primary apply num"
+        aria-disabled={busy || !canApply || undefined}
+        data-busy={busy || undefined}
+        onclick={apply}
+      >
+        {busy ? (app.busy?.label ?? "Working") : applyLabel}
+      </button>
+      <button
+        type="button"
+        class="btn btn-ghost review-toggle"
+        aria-expanded={reviewOpen}
+        aria-controls={reviewOpen ? "review-list" : undefined}
+        disabled={!loaded}
+        onclick={() => (reviewOpen = !reviewOpen)}
+      >
+        <ListChecks size={16} strokeWidth={1.75} aria-hidden="true" />
+        {reviewOpen ? "Hide list" : "Review list"}
+      </button>
+    </div>
+
+    <div class="note" aria-live="polite">
+      {#if phase === "restore"}
+        <p>Making a restore point</p>
+      {:else if phase === "scan"}
+        <p>Looking for junk files</p>
+      {:else if phase === "clean"}
+        <p>Cleaning up junk files</p>
+      {:else if phase === "apply" && progress}
+        <div class="progress">
+          <p class="num">
+            {#if progress.done >= progress.total}
+              Finishing up
+            {:else}
+              Applying {progress.done + 1} of {progress.total}{progress.current ? ` — ${progress.current}` : ""}
+            {/if}
+          </p>
+          <div class="bar" aria-hidden="true">
+            <div class="fill" style:width="{progress.total ? (progress.done / progress.total) * 100 : 0}%"></div>
+          </div>
         </div>
-      </div>
-    {:else}
-      <LifeBuoy size={16} strokeWidth={1.75} aria-hidden="true" />
-      <p>A restore point is made before the first change.</p>
-    {/if}
-  </div>
-
-  {#if applyError}
-    <p class="error" role="alert">Couldn't apply: {applyError}</p>
-  {:else if nothingChanged}
-    <p class="muted small" role="status">Nothing was changed.</p>
-  {/if}
-
-  <div class="actions">
-    <button
-      bind:this={applyButton}
-      type="button"
-      class="btn btn-primary apply num"
-      disabled={!canApply && !busy}
-      aria-disabled={busy || undefined}
-      onclick={apply}
-    >
-      {busy ? (app.busy?.label ?? "Working") : applyLabel}
-    </button>
-    <button
-      type="button"
-      class="btn btn-ghost"
-      aria-expanded={reviewOpen}
-      aria-controls={reviewOpen ? "review-list" : undefined}
-      disabled={!loaded}
-      onclick={() => (reviewOpen = !reviewOpen)}
-    >
-      <ListChecks size={16} strokeWidth={1.75} aria-hidden="true" />
-      {reviewOpen ? "Hide list" : "Review list"}
-    </button>
+      {:else if applyError}
+        <p class="error" role="alert">Couldn't apply: {applyError}</p>
+      {:else if nothingChanged}
+        <p role="status">Nothing was changed.</p>
+      {:else}
+        <LifeBuoy size={14} strokeWidth={1.75} aria-hidden="true" />
+        <p>A restore point is made before the first change.</p>
+      {/if}
+    </div>
   </div>
   {#if reviewOpen}
     <section id="review-list" class="review" aria-labelledby="review-heading">
@@ -257,7 +310,7 @@
                 aria-checked={on}
                 aria-label={t.title}
                 class="switch"
-                disabled={busy}
+                aria-disabled={busy || undefined}
                 onclick={() => toggle(t.id)}
               ><span class="knob"></span></button>
               <span class="title">{t.title}</span>
@@ -293,10 +346,17 @@
     min-height: 0;
   }
 
+  /* One strip split by rules, not three cards. */
   .stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: var(--space-3);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+
+  .stats > :global(* + *) {
+    border-left: 1px solid var(--border);
   }
 
   .presets {
@@ -316,16 +376,23 @@
     gap: var(--space-3);
   }
 
+  .also {
+    font-size: var(--text-sm);
+    color: var(--muted);
+  }
+
+  .go {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
   .note {
     display: flex;
     align-items: center;
-    gap: var(--space-3);
-    min-height: 44px;
-    padding: var(--space-2) var(--space-4);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    font-size: var(--text-sm);
+    gap: var(--space-2);
+    min-height: 20px;
+    font-size: var(--text-xs);
     color: var(--muted);
   }
 
@@ -337,7 +404,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: var(--space-2);
+    gap: var(--space-1);
     color: var(--text);
   }
 
@@ -355,7 +422,6 @@
   }
 
   .error {
-    font-size: var(--text-sm);
     color: var(--adv);
   }
 
@@ -423,46 +489,6 @@
     color: var(--adv);
   }
 
-  .switch {
-    position: relative;
-    flex: none;
-    width: 32px;
-    height: 18px;
-    padding: 0;
-    border: 0;
-    border-radius: var(--radius-pill);
-    background: var(--border-strong);
-    cursor: pointer;
-    transition: background-color var(--duration) var(--ease);
-  }
-
-  .switch .knob {
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--muted);
-    transition:
-      transform var(--duration) var(--ease),
-      background-color var(--duration) var(--ease);
-  }
-
-  .switch[aria-checked="true"] {
-    background: var(--accent);
-  }
-
-  .switch[aria-checked="true"] .knob {
-    transform: translateX(14px);
-    background: var(--on-accent);
-  }
-
-  .switch:disabled {
-    cursor: not-allowed;
-    opacity: 0.55;
-  }
-
   .actions {
     display: flex;
     gap: var(--space-3);
@@ -472,12 +498,9 @@
     flex: 1;
   }
 
-  .apply[aria-disabled="true"] {
-    cursor: progress;
-    opacity: 0.7;
+  /* Same width for "Review list" and "Hide list", so Apply doesn't jump. */
+  .review-toggle {
+    min-width: 128px;
   }
 
-  .small {
-    font-size: var(--text-sm);
-  }
 </style>

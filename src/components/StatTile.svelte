@@ -23,9 +23,6 @@
     flex-direction: column;
     gap: 2px;
     padding: var(--space-3) var(--space-4);
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
     min-width: 0;
   }
 

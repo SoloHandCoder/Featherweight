@@ -3,7 +3,15 @@
 // irreversible tweaks) -> apply. UI questions are injected so the order
 // is testable without a backend.
 
-import type { ApplyReport, NaReason, RestorePointOutcome, TweakView, UndoReport } from "./types";
+import type {
+  ApplyReport,
+  CleanupReport,
+  CleanupTarget,
+  NaReason,
+  RestorePointOutcome,
+  TweakView,
+  UndoReport,
+} from "./types";
 
 /** `true` continue, `false` cancel, `"enable"` turn on System Restore and retry. */
 export type RestoreChoice = boolean | "enable";
@@ -14,8 +22,11 @@ export interface ApplyDeps {
   ensureRestorePoint: () => Promise<RestorePointOutcome>;
   enableSystemRestore: () => Promise<void>;
   applyTweaks: (ids: string[], allUsers: string[]) => Promise<ApplyReport>;
-  /** Resolves true to go ahead with these irreversible ids, false to skip them. */
-  confirmIrreversible: (ids: string[]) => Promise<boolean>;
+  /**
+   * Resolves true to go ahead with these irreversible ids (and, for a
+   * preset, these cleanup targets), false to skip all of them.
+   */
+  confirmIrreversible: (ids: string[], cleanup?: CleanupTarget[]) => Promise<boolean>;
   /** Asked when the restore point is Throttled, Disabled or Failed. */
   confirmRestoreIssue: (
     o: RestorePointOutcome,
@@ -98,6 +109,59 @@ export async function runApply(
   );
 }
 
+export interface PresetDeps extends ApplyDeps {
+  scanCleanup: () => Promise<CleanupTarget[]>;
+  runCleanup: (ids: string[]) => Promise<CleanupReport>;
+}
+
+export interface PresetResult {
+  /** Null when no tweak was applied (none picked, or all skipped). */
+  apply: ApplyReport | null;
+  /** Null when no cleanup ran. */
+  cleanup: CleanupReport | null;
+  /** Set when the scan or the cleanup itself failed; the tweaks still ran. */
+  cleanupError: string | null;
+}
+
+/**
+ * A preset: its tweaks plus every cleanup target with something in it.
+ * restore point -> scan -> one confirmation for the irreversible tweaks
+ * and the cleanup together ("Skip these" skips both) -> apply -> clean.
+ * Resolves null when the user cancelled at the restore point question.
+ */
+export async function runPreset(ids: string[], deps: PresetDeps): Promise<PresetResult | null> {
+  if (!(await restorePointStep(deps))) return null;
+
+  let targets: CleanupTarget[] = [];
+  let cleanupError: string | null = null;
+  try {
+    targets = (await deps.scanCleanup()).filter((t) => t.bytes > 0);
+  } catch (e) {
+    cleanupError = `Couldn't look for junk files: ${message(e)}`;
+  }
+
+  const { irreversible } = planApply(ids, deps.tweaks);
+  let chosen = ids;
+  if (irreversible.length > 0 || targets.length > 0) {
+    if (!(await deps.confirmIrreversible(irreversible, targets))) {
+      const skip = new Set(irreversible);
+      chosen = ids.filter((id) => !skip.has(id));
+      targets = [];
+    }
+  }
+
+  const apply = chosen.length > 0 ? await deps.applyTweaks(chosen, []) : null;
+  let cleanup: CleanupReport | null = null;
+  if (targets.length > 0) {
+    try {
+      cleanup = await deps.runCleanup(targets.map((t) => t.id));
+    } catch (e) {
+      cleanupError = `Couldn't clean up: ${message(e)}`;
+    }
+  }
+  return { apply, cleanup, cleanupError };
+}
+
 /**
  * Friendly app name from a `changes` line such as
  * `Remove app "king.com.CandyCrushSaga" (all users)` -> "Candy Crush Saga".
@@ -125,6 +189,8 @@ export interface ResultGroup {
   label: string;
   tone: "ok" | "muted" | "bad";
   items: ResultItem[];
+  /** A one-line group (e.g. "Cleaned up") reads better without the item count. */
+  hideCount?: boolean;
 }
 
 export const NA_REASON: Record<NaReason, string> = {
@@ -219,9 +285,22 @@ export function resultHeadline(groups: ResultGroup[]): { title: string; summary?
     groups.filter((g) => labels.includes(g.label)).reduce((n, g) => n + g.items.length, 0);
   const applied = count("Applied");
   const restored = count("Restored");
-  const problems = count("Failed", "Failed to apply", "Failed to undo", "Changed since");
+  const failures = count("Failed", "Failed to apply", "Failed to undo");
+  const changedSince = count("Changed since");
   const plural = (n: number) => `${n} ${n === 1 ? "change" : "changes"}`;
-  if (problems > 0) return { title: "Some changes didn't go through", summary: "The ones that didn't say why." };
+  if (failures > 0) return { title: "Some changes didn't go through", summary: "Each one that didn't says why." };
+  if (changedSince > 0)
+    return {
+      ...(changedSince === 1
+        ? {
+            title: "One setting was left alone",
+            summary: "Something else changed it after Featherweight did. Restore anyway puts it back.",
+          }
+        : {
+            title: `${changedSince} settings were left alone`,
+            summary: "Something else changed them after Featherweight did. Restore anyway puts them back.",
+          }),
+    };
   if (applied + restored === 0) {
     if (count("Reinstall manually") > 0) return { title: "Some apps need reinstalling" };
     return { title: "Nothing needed changing", summary: "This PC already had these settings." };

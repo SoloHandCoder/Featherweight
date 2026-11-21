@@ -9,11 +9,13 @@ import {
   restorePointStep,
   resultHeadline,
   runApply,
+  runPreset,
   storeLink,
   type ApplyDeps,
+  type PresetDeps,
   type ResultGroup,
 } from "./applyFlow";
-import type { ApplyReport, RestorePointOutcome, TweakView } from "./types";
+import type { ApplyReport, CleanupTarget, RestorePointOutcome, TweakView } from "./types";
 
 function tweak(id: string, irreversible = false, changes: string[] = []): TweakView {
   return {
@@ -49,6 +51,106 @@ function deps(restore: RestorePointOutcome, overrides: Partial<ApplyDeps> = {}):
     ...overrides,
   };
 }
+
+const targets: CleanupTarget[] = [
+  { id: "temp", label: "Temporary files", paths: [], bytes: 1000, needsServiceStop: null },
+  { id: "empty", label: "Empty cache", paths: [], bytes: 0, needsServiceStop: null },
+];
+
+function presetDeps(restore: RestorePointOutcome, overrides: Partial<PresetDeps> = {}): PresetDeps {
+  return {
+    ...deps(restore),
+    scanCleanup: vi.fn(async () => targets),
+    runCleanup: vi.fn(async (ids: string[]) => ({ freedBytes: ids.length * 1000, skippedFiles: 0 })),
+    ...overrides,
+  };
+}
+
+describe("runPreset", () => {
+  it("cleanup_included_when_confirmed", async () => {
+    const d = presetDeps({ kind: "created" });
+    const r = await runPreset(["ads", "junk"], d);
+    expect(d.confirmIrreversible).toHaveBeenCalledWith(["junk"], [targets[0]]);
+    expect(d.applyTweaks).toHaveBeenCalledWith(["ads", "junk"], []);
+    expect(d.runCleanup).toHaveBeenCalledWith(["temp"]);
+    expect(r).toEqual({
+      apply: report(["ads", "junk"]),
+      cleanup: { freedBytes: 1000, skippedFiles: 0 },
+      cleanupError: null,
+    });
+  });
+
+  it("applies_before_cleaning", async () => {
+    const order: string[] = [];
+    const d = presetDeps(
+      { kind: "created" },
+      {
+        applyTweaks: vi.fn(async (ids: string[]) => {
+          order.push("apply");
+          return report(ids);
+        }),
+        runCleanup: vi.fn(async () => {
+          order.push("clean");
+          return { freedBytes: 1, skippedFiles: 0 };
+        }),
+      },
+    );
+    await runPreset(["ads"], d);
+    expect(order).toEqual(["apply", "clean"]);
+  });
+
+  it("asks_about_cleanup_even_without_irreversible_tweaks", async () => {
+    const d = presetDeps({ kind: "created" });
+    await runPreset(["ads"], d);
+    expect(d.confirmIrreversible).toHaveBeenCalledWith([], [targets[0]]);
+  });
+
+  it("skip_these_skips_app_removal_and_cleanup", async () => {
+    const d = presetDeps({ kind: "created" }, { confirmIrreversible: vi.fn(async () => false) });
+    const r = await runPreset(["ads", "junk"], d);
+    expect(d.applyTweaks).toHaveBeenCalledWith(["ads"], []);
+    expect(d.runCleanup).not.toHaveBeenCalled();
+    expect(r?.cleanup).toBeNull();
+  });
+
+  it("cleanup_not_run_when_restore_point_cancelled", async () => {
+    const d = presetDeps({ kind: "failed", message: "x" }, { confirmRestoreIssue: vi.fn(async () => false) });
+    expect(await runPreset(["ads"], d)).toBeNull();
+    expect(d.scanCleanup).not.toHaveBeenCalled();
+    expect(d.applyTweaks).not.toHaveBeenCalled();
+    expect(d.runCleanup).not.toHaveBeenCalled();
+  });
+
+  it("does_not_ask_when_nothing_is_irreversible_or_dirty", async () => {
+    const d = presetDeps({ kind: "created" }, { scanCleanup: vi.fn(async () => [targets[1]]) });
+    const r = await runPreset(["ads"], d);
+    expect(d.confirmIrreversible).not.toHaveBeenCalled();
+    expect(d.runCleanup).not.toHaveBeenCalled();
+    expect(r?.apply).toEqual(report(["ads"]));
+  });
+
+  it("cleanup_only_when_no_tweaks_are_left", async () => {
+    const d = presetDeps({ kind: "created" });
+    const r = await runPreset([], d);
+    expect(d.applyTweaks).not.toHaveBeenCalled();
+    expect(r).toEqual({ apply: null, cleanup: { freedBytes: 1000, skippedFiles: 0 }, cleanupError: null });
+  });
+
+  it("a_failed_scan_still_applies_the_tweaks", async () => {
+    const d = presetDeps({ kind: "created" }, { scanCleanup: vi.fn(async () => Promise.reject(new Error("denied"))) });
+    const r = await runPreset(["ads"], d);
+    expect(r?.apply).toEqual(report(["ads"]));
+    expect(r?.cleanup).toBeNull();
+    expect(r?.cleanupError).toBe("Couldn't look for junk files: denied");
+  });
+
+  it("a_failed_cleanup_keeps_the_apply_report", async () => {
+    const d = presetDeps({ kind: "created" }, { runCleanup: vi.fn(async () => Promise.reject(new Error("busy"))) });
+    const r = await runPreset(["ads"], d);
+    expect(r?.apply).toEqual(report(["ads"]));
+    expect(r?.cleanupError).toBe("Couldn't clean up: busy");
+  });
+});
 
 describe("planApply", () => {
   it("splits ids into reversible and irreversible, keeping order", () => {
@@ -270,7 +372,9 @@ describe("combineGroups and resultHeadline", () => {
       title: "3 changes made",
       summary: "1 applied, 2 put back.",
     });
-    expect(resultHeadline([g("Restored"), g("Changed since")]).title).toBe("Some changes didn't go through");
+    expect(resultHeadline([g("Restored"), g("Failed")]).title).toBe("Some changes didn't go through");
+    expect(resultHeadline([g("Restored"), g("Changed since")]).title).toBe("One setting was left alone");
+    expect(resultHeadline([g("Changed since", 2), g("Failed")]).title).toBe("Some changes didn't go through");
     expect(resultHeadline([g("Already original")]).title).toBe("Nothing needed changing");
   });
 });
