@@ -7,7 +7,7 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig({
   plugins: [svelte()],
 
-  // Keep worktree copies under .claude/ out of the test run.
+  // Keep local worktree copies out of the test run.
   test: { exclude: [...configDefaults.exclude, ".claude/**"] },
 
   // Tauri expects a fixed port and must not have its Rust errors hidden.
