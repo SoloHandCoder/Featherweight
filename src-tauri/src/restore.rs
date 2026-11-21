@@ -2,6 +2,10 @@
 
 use crate::system::{SysError, System};
 use serde::Serialize;
+use std::time::Duration;
+
+/// Checkpoint-Computer can take minutes on a busy disk.
+pub const RESTORE_POINT_TIMEOUT: Duration = Duration::from_secs(300);
 
 pub const CHECKPOINT_SCRIPT: &str = r#"Checkpoint-Computer -Description "Featherweight" -RestorePointType MODIFY_SETTINGS -WarningAction Stop"#;
 pub const ENABLE_SCRIPT: &str = r#"Enable-ComputerRestore -Drive "$env:SystemDrive\""#;
@@ -39,7 +43,7 @@ pub fn ensure<S: System>(g: &mut RestoreGuard, sys: &mut S) -> RestorePointOutco
     if g.made_this_session {
         return RestorePointOutcome::AlreadyMadeThisSession;
     }
-    let outcome = match sys.run_powershell(CHECKPOINT_SCRIPT) {
+    let outcome = match sys.run_powershell_for(CHECKPOINT_SCRIPT, RESTORE_POINT_TIMEOUT) {
         Ok(out) => classify(&out).unwrap_or(RestorePointOutcome::Created),
         Err(SysError::Other(msg)) => classify(&msg).unwrap_or(RestorePointOutcome::Failed(msg)),
         Err(e) => RestorePointOutcome::Failed(format!("{e:?}")),
@@ -67,6 +71,16 @@ mod tests {
         assert_eq!(ensure(&mut g, &mut sys), RestorePointOutcome::Created);
         assert_eq!(ensure(&mut g, &mut sys), RestorePointOutcome::AlreadyMadeThisSession);
         assert_eq!(sys.ps_calls.len(), 1);
+    }
+
+    #[test]
+    fn checkpoint_gets_a_longer_timeout_than_other_tools() {
+        let mut sys = FakeSystem::new().with_ps(CHECKPOINT_SCRIPT, "").with_ps(ENABLE_SCRIPT, "");
+        ensure(&mut RestoreGuard::default(), &mut sys);
+        enable(&mut sys).unwrap();
+        assert_eq!(RESTORE_POINT_TIMEOUT, std::time::Duration::from_secs(300));
+        assert!(RESTORE_POINT_TIMEOUT > crate::system::TOOL_TIMEOUT);
+        assert_eq!(sys.ps_timeouts, vec![RESTORE_POINT_TIMEOUT, crate::system::TOOL_TIMEOUT]);
     }
 
     #[test]

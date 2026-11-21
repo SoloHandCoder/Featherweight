@@ -37,7 +37,7 @@ use winreg::enums::{
     REG_BINARY, REG_DWORD, REG_EXPAND_SZ, REG_QWORD, REG_SZ,
 };
 
-use super::{AppxCache, SysError, System};
+use super::{AppxCache, SysError, System, TOOL_TIMEOUT};
 use crate::model::{Hive, RegData, StartType};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -293,7 +293,6 @@ fn tool_env() -> &'static [(String, OsString)] {
     })
 }
 
-const TOOL_TIMEOUT: Duration = Duration::from_secs(120);
 
 fn drain<R: Read + Send + 'static>(mut r: R) -> std::thread::JoinHandle<Vec<u8>> {
     std::thread::spawn(move || {
@@ -306,6 +305,11 @@ fn drain<R: Read + Send + 'static>(mut r: R) -> std::thread::JoinHandle<Vec<u8>>
 /// Runs a console tool without a window; arguments are passed separately.
 /// Killed after `TOOL_TIMEOUT`.
 fn run_tool(exe: &std::path::Path, args: &[&str]) -> Result<Output, SysError> {
+    run_tool_for(exe, args, TOOL_TIMEOUT)
+}
+
+/// `run_tool` with its own time limit.
+fn run_tool_for(exe: &std::path::Path, args: &[&str], timeout: Duration) -> Result<Output, SysError> {
     let name = exe.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     let mut child = Command::new(exe)
         .args(args)
@@ -320,7 +324,7 @@ fn run_tool(exe: &std::path::Path, args: &[&str]) -> Result<Output, SysError> {
         .map_err(|e| map_io(e, &exe.display().to_string()))?;
     let out = drain(child.stdout.take().expect("piped"));
     let err = drain(child.stderr.take().expect("piped"));
-    let deadline = Instant::now() + TOOL_TIMEOUT;
+    let deadline = Instant::now() + timeout;
     let status = loop {
         match child.try_wait().map_err(|e| map_io(e, &name))? {
             Some(st) => break st,
@@ -329,7 +333,7 @@ fn run_tool(exe: &std::path::Path, args: &[&str]) -> Result<Output, SysError> {
                 let _ = child.wait();
                 return Err(SysError::Other(format!(
                     "timed out after {}s running {name}",
-                    TOOL_TIMEOUT.as_secs()
+                    timeout.as_secs()
                 )));
             }
             None => std::thread::sleep(Duration::from_millis(20)),
@@ -399,6 +403,10 @@ fn tool_err(what: &str, o: &Output, denied_if_unelevated: bool) -> SysError {
 }
 
 fn run_ps(script: &str) -> Result<Output, SysError> {
+    run_ps_for(script, TOOL_TIMEOUT)
+}
+
+fn run_ps_for(script: &str, timeout: Duration) -> Result<Output, SysError> {
     let exe = system32().join(r"WindowsPowerShell\v1.0\powershell.exe");
     // Module autoloading reads $env:PSModulePath when a command is first
     // used, so pin it to $PSHOME\Modules inside the session as well.
@@ -408,9 +416,10 @@ fn run_ps(script: &str) -> Result<Output, SysError> {
     );
     let utf16le: Vec<u8> = full.encode_utf16().flat_map(u16::to_le_bytes).collect();
     let encoded = base64(&utf16le);
-    run_tool(
+    run_tool_for(
         &exe,
         &["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", &encoded],
+        timeout,
     )
 }
 
@@ -897,8 +906,8 @@ impl System for WindowsSystem {
         if o.ok { Ok(()) } else { Err(tool_err("powercfg /setactive", &o, false)) }
     }
 
-    fn run_powershell(&mut self, script: &str) -> Result<String, SysError> {
-        let o = run_ps(script)?;
+    fn run_powershell_for(&mut self, script: &str, timeout: Duration) -> Result<String, SysError> {
+        let o = run_ps_for(script, timeout)?;
         if o.ok { Ok(o.stdout.trim().to_string()) } else { Err(tool_err("powershell", &o, false)) }
     }
 

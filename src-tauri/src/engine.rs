@@ -342,10 +342,13 @@ impl<S: System> Engine<S> {
             .collect()
     }
 
+    /// The catalog action the entry was journaled for, if the catalog still
+    /// has it at that index (a changed catalog may have moved actions).
     fn hint_for(&self, e: &JournalEntry) -> Option<ActionDef> {
-        self.catalog
-            .get(&e.tweak_id)
-            .and_then(|t| t.actions.get(e.action_index))
+        let t = self.catalog.get(&e.tweak_id)?;
+        t.actions
+            .get(e.action_index)
+            .filter(|a| a.key(&t.id, e.action_index) == e.key)
             .cloned()
     }
 
@@ -865,6 +868,34 @@ reinstall = "9NBLGGH18846"
                 }]
             )]
         );
+    }
+
+    #[test]
+    fn hint_is_ignored_when_the_catalog_action_no_longer_matches_the_key() {
+        let d = tempfile::tempdir().unwrap();
+        let mut e = engine_with(base_sys(), &d);
+        // Journaled by an older catalog in which action 1 of "a" was a
+        // registry value; today action 1 is the SvcA service.
+        e.sys.reg_set(Hive::Hklm, r"Software\Old", "V", Some(&RegData::Dword(9))).unwrap();
+        e.journal
+            .record(JournalEntry {
+                key: ValueKey::Registry { hive: Hive::Hklm, path: r"software\old".into(), name: "v".into() },
+                tweak_id: "a".into(),
+                action_index: 1,
+                before: Snapshot::Reg(None),
+                after: Snapshot::Reg(Some(RegData::Dword(1))),
+                applied_at: now_rfc3339(),
+                user_sid: None,
+            })
+            .unwrap();
+        let u = e.undo(&ids(&["a"]), false);
+        match &u[0].1[..] {
+            [UndoOutcome::ChangedSince(what)] => {
+                assert!(what.contains(r"software\old"), "described by its key, not the service: {what}")
+            }
+            other => panic!("expected ChangedSince, got {other:?}"),
+        }
+        assert_eq!(svc_a(&e), Some(StartType::Automatic), "the service is not touched");
     }
 
     #[test]

@@ -2,6 +2,10 @@
 //! engine can be tested against an in-memory fake.
 
 use crate::model::{Hive, RegData, StartType};
+use std::time::Duration;
+
+/// How long any external tool may run before it is killed.
+pub const TOOL_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[cfg(test)]
 pub mod fake;
@@ -132,6 +136,10 @@ pub trait System {
         duplicate_from: Option<&str>,
     ) -> Result<(), SysError>;
     fn set_power_scheme(&mut self, guid: &str) -> Result<(), SysError>;
-    /// Trimmed stdout.
-    fn run_powershell(&mut self, script: &str) -> Result<String, SysError>;
+    /// Trimmed stdout; killed after `TOOL_TIMEOUT`.
+    fn run_powershell(&mut self, script: &str) -> Result<String, SysError> {
+        self.run_powershell_for(script, TOOL_TIMEOUT)
+    }
+    /// Trimmed stdout; killed after `timeout`.
+    fn run_powershell_for(&mut self, script: &str, timeout: Duration) -> Result<String, SysError>;
 }

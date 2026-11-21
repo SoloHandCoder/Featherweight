@@ -33,6 +33,8 @@ pub struct FakeSystem {
     pub removed_appx: Vec<(String, bool)>,
     /// Every script passed to `run_powershell`.
     pub ps_calls: Vec<String>,
+    /// The timeout of each of those calls.
+    pub ps_timeouts: Vec<std::time::Duration>,
     /// Services (lowercase names) stopped via `set_service_start(.., Disabled)`.
     pub stopped_services: HashSet<String>,
     /// Services (lowercase names) currently running.
@@ -81,6 +83,7 @@ impl FakeSystem {
             ps_errors: HashMap::new(),
             removed_appx: Vec::new(),
             ps_calls: Vec::new(),
+            ps_timeouts: Vec::new(),
             stopped_services: HashSet::new(),
             running_services: HashSet::new(),
             service_calls: Vec::new(),
@@ -324,9 +327,14 @@ impl System for FakeSystem {
         Ok(())
     }
 
-    fn run_powershell(&mut self, script: &str) -> Result<String, SysError> {
+    fn run_powershell_for(
+        &mut self,
+        script: &str,
+        timeout: std::time::Duration,
+    ) -> Result<String, SysError> {
         self.check_fail()?;
         self.ps_calls.push(script.to_string());
+        self.ps_timeouts.push(timeout);
         if let Some(msg) = self.ps_errors.get(script) {
             return Err(SysError::Other(msg.clone()));
         }
