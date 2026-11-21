@@ -10,9 +10,16 @@ use std::path::{Path, PathBuf};
 pub struct CleanupTarget {
     pub id: String,
     pub label: String,
+    #[serde(serialize_with = "paths_lossy")]
     pub paths: Vec<PathBuf>,
     pub bytes: u64,
     pub needs_service_stop: Option<String>,
+}
+
+/// Serializes paths with `to_string_lossy` so a non-UTF-8 path can't make the
+/// whole scan fail (serde refuses such paths by default).
+fn paths_lossy<S: serde::Serializer>(paths: &[PathBuf], s: S) -> Result<S::Ok, S::Error> {
+    s.collect_seq(paths.iter().map(|p| p.to_string_lossy()))
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
@@ -225,16 +232,7 @@ fn is_link(m: &fs::Metadata) -> bool {
 /// Directory-flavoured link (junction or dir symlink) needs `remove_dir`.
 #[cfg(not(windows))]
 fn is_dir_link(m: &fs::Metadata) -> bool {
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        const FILE_ATTRIBUTE_DIRECTORY: u32 = 0x10;
-        m.file_attributes() & FILE_ATTRIBUTE_DIRECTORY != 0
-    }
-    #[cfg(not(windows))]
-    {
-        m.is_dir()
-    }
+    m.is_dir()
 }
 
 /// `thumbcache_*.db`-style: a single `*` in the final component.
@@ -918,6 +916,20 @@ mod tests {
         let r = clean(&mut sys, &t);
         assert_eq!(r.freed_bytes, 10);
         assert_eq!(sys.service_calls, vec!["stop:wuauserv"]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn target_with_non_utf8_path_serializes_lossily() {
+        use std::os::windows::ffi::OsStringExt;
+        // 0xD800 is an unpaired surrogate: not valid UTF-16, so not a valid str.
+        let wide = [b'C' as u16, b':' as u16, 0x5C, 0xD800, b'x' as u16];
+        let p = PathBuf::from(std::ffi::OsString::from_wide(&wide));
+        assert!(p.to_str().is_none());
+        let t = target(vec![p], None);
+        let j = serde_json::to_value(&t).expect("must not fail");
+        let s = j["paths"][0].as_str().unwrap();
+        assert!(s.starts_with(r"C:\") && s.contains('\u{FFFD}') && s.ends_with('x'));
     }
 
     #[test]
